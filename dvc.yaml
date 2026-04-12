@@ -1,0 +1,88 @@
+
+stages:
+  fetch_raw:
+    cmd: python -m src.data.download_galaxy_zoo
+    deps:
+      - src/data/download_galaxy_zoo.py
+      - src/common/config.py
+      - src/common/io_utils.py
+      - config.yaml
+    outs:
+      - data/raw/galaxy_dataset
+      - artifacts/raw_data_summary.json
+
+  preprocess_v1:
+    cmd: python -m src.data.preprocess_v1
+    deps:
+      - src/data/preprocess_v1.py
+      - src/data/validate.py
+      - src/common/config.py
+      - src/common/io_utils.py
+      - config.yaml
+      - data/raw/galaxy_dataset
+    outs:
+      - data/processed/v1
+      - artifacts/processed_v1_summary.json
+
+  preprocess_final:
+    cmd: python -m src.data.preprocess_final
+    deps:
+      - src/data/preprocess_final.py
+      - src/data/validate.py
+      - src/features/baseline.py
+      - src/common/config.py
+      - src/common/io_utils.py
+      - config.yaml
+      - data/processed/v1
+    outs:
+      - data/processed/final
+      - artifacts/processed_final_summary.json
+      - artifacts/data_manifest.csv
+      - artifacts/drift_baseline.json
+
+  train:
+    cmd: python -m src.training.train
+    deps:
+      - src/training/train.py
+      - src/training/model_def.py
+      - src/common/config.py
+      - src/common/io_utils.py
+      - config.yaml
+      - data/processed/final
+    outs:
+      - models/latest
+    metrics:
+      - artifacts/train_metrics.json
+      - artifacts/test_metrics.json
+    plots:
+      - artifacts/confusion_matrix.csv
+
+  evaluate:
+    cmd: python -m src.training.evaluate
+    deps:
+      - src/training/evaluate.py
+      - src/common/config.py
+      - src/common/io_utils.py
+      - config.yaml
+      - models/latest
+      - data/processed/final/test
+    metrics:
+      - artifacts/test_metrics.json
+      - artifacts/live_metrics.json
+
+  report:
+    cmd: python -m src.reporting.generate_report
+    deps:
+      - src/reporting/generate_report.py
+      - src/training/evaluate.py
+      - src/common/config.py
+      - src/common/io_utils.py
+      - config.yaml
+      - artifacts/raw_data_summary.json
+      - artifacts/processed_v1_summary.json
+      - artifacts/processed_final_summary.json
+      - artifacts/train_metrics.json
+      - artifacts/test_metrics.json
+    outs:
+      - artifacts/reports/latest_report.md
+      - artifacts/reports/latest_report.html

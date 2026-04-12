@@ -1,0 +1,35 @@
+
+groups:
+  - name: galaxy-mlops-alerts
+    rules:
+      - alert: GalaxyAPIUnavailable
+        expr: galaxy_api_ready == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: API gateway is not ready
+
+      - alert: GalaxyModelUnavailable
+        expr: galaxy_model_ready == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Model service is not ready
+
+      - alert: GalaxyDriftHigh
+        expr: abs(galaxy_input_brightness_zscore) > 3
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Input drift brightness z-score exceeded threshold
+
+      - alert: GalaxyLiveAccuracyLow
+        expr: galaxy_live_feedback_accuracy < 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Live feedback accuracy dropped below threshold

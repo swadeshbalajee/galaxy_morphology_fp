@@ -1,0 +1,27 @@
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: project-logs
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: project-logs
+          service: app-logs
+          __path__: /workspace/logs/*.log
+
+  - job_name: airflow-logs
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: airflow-logs
+          service: airflow
+          __path__: /workspace/airflow/logs/**/*.log

@@ -1,0 +1,113 @@
+
+project:
+  name: galaxy-mlops
+  display_name: Galaxy Morphology Classification with DVC + Airflow MLOps
+  random_seed: 42
+
+paths:
+  raw_cache_dir: data/raw/galaxy_zoo_cache
+  raw_dataset_dir: data/raw/galaxy_dataset
+  processed_v1_dir: data/processed/v1
+  processed_final_dir: data/processed/final
+  artifacts_dir: artifacts
+  reports_dir: artifacts/reports
+  models_dir: models/latest
+  logs_dir: logs
+  predictions_db_path: artifacts/predictions.db
+  control_plane_state_path: artifacts/control_plane_state.json
+  raw_summary_path: artifacts/raw_data_summary.json
+  processed_v1_summary_path: artifacts/processed_v1_summary.json
+  processed_final_summary_path: artifacts/processed_final_summary.json
+  drift_baseline_path: artifacts/drift_baseline.json
+  train_metrics_path: artifacts/train_metrics.json
+  test_metrics_path: artifacts/test_metrics.json
+  live_metrics_path: artifacts/live_metrics.json
+  confusion_matrix_path: artifacts/confusion_matrix.csv
+  classification_report_path: artifacts/classification_report.json
+  latest_report_md_path: artifacts/reports/latest_report.md
+  latest_report_html_path: artifacts/reports/latest_report.html
+  pipeline_runtime_summary_path: artifacts/pipeline_runtime_summary.json
+
+runtime:
+  config_path_env: APP_CONFIG_PATH
+  max_upload_mb: 10
+
+data:
+  layout: project5
+  classes:
+    - elliptical
+    - spiral
+    - lenticular
+    - irregular
+    - merger
+  source:
+    labels_url: https://gz2hart.s3.amazonaws.com/gz2_hart16.csv.gz
+    mapping_url: https://zenodo.org/records/3565489/files/gz2_filename_mapping.csv?download=1
+    images_url: https://zenodo.org/records/3565489/files/images_gz2.zip?download=1
+  image_size: 224
+  preprocess_v1_size: 256
+  train_split: 0.70
+  val_split: 0.15
+  test_split: 0.15
+  max_images_per_class: 1000
+  target_images_per_class: 1000
+  min_required_class_count: 5
+  allowed_suffixes: [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
+  normalize_mean: [0.485, 0.456, 0.406]
+  normalize_std: [0.229, 0.224, 0.225]
+  threshold_start: 0.80
+  threshold_min: 0.35
+  threshold_step: 0.05
+  merger_threshold_start: 0.60
+  merger_threshold_min: 0.30
+  lenticular_bulge_threshold_start: 0.25
+  lenticular_bulge_threshold_min: 0.05
+  sampling_seed: 42
+
+training:
+  epochs: 5
+  batch_size: 32
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  num_workers: 0
+  early_stopping_patience: 3
+  pretrained_backbone: resnet18
+  train_backbone: true
+
+inference:
+  top_k: 3
+
+continuous_improvement:
+  enabled: true
+  accuracy_threshold: 0.85
+  macro_f1_threshold: 0.80
+  drift_zscore_alert_threshold: 3.0
+  min_new_feedback_samples: 5
+  min_total_feedback_samples: 10
+  promote_only_if_better_than_current: true
+  monitor_schedule: "*/30 * * * *"
+
+reporting:
+  include_feedback_metrics: true
+  report_title: Galaxy Morphology Training and Monitoring Report
+
+email:
+  enabled: false
+  sender: galaxy-mlops@example.com
+  recipients:
+    - evaluator@example.com
+  smtp_host: smtp.example.com
+  smtp_port: 587
+  use_tls: true
+  username_env: SMTP_USERNAME
+  password_env: SMTP_PASSWORD
+  subject_prefix: "[Galaxy MLOps]"
+
+services:
+  model_service_url: http://model-service:8001
+  api_url: http://api:8000
+  airflow_url: http://airflow-api-server:8080
+  mlflow_url: http://mlflow:5000
+  prometheus_url: http://prometheus:9090
+  grafana_url: http://grafana:3000
+  loki_url: http://loki:3100
