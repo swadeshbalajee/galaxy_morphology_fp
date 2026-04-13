@@ -18,6 +18,7 @@ def generate_report() -> dict:
     processed_v1_summary = read_json(resolve_path(config, 'paths.processed_v1_summary_path'), {})
     processed_final_summary = read_json(resolve_path(config, 'paths.processed_final_summary_path'), {})
     train_metrics = read_json(resolve_path(config, 'paths.train_metrics_path'), {})
+    validation_metrics = read_json(resolve_path(config, 'paths.validation_metrics_path'), {})
     test_metrics = read_json(resolve_path(config, 'paths.test_metrics_path'), {})
     live_metrics = evaluate_live_feedback()
     runtime_summary = read_json(resolve_path(config, 'paths.pipeline_runtime_summary_path'), {})
@@ -30,6 +31,7 @@ def generate_report() -> dict:
         'processed_v1_summary': processed_v1_summary,
         'processed_final_summary': processed_final_summary,
         'train_metrics': train_metrics,
+        'validation_metrics': validation_metrics,
         'test_metrics': test_metrics,
         'live_metrics': live_metrics,
         'runtime_summary': runtime_summary,
@@ -48,6 +50,10 @@ def generate_report() -> dict:
         f"- Raw counts: {raw_summary.get('actual_counts', {})}",
         f"- Processed v1 total images: {processed_v1_summary.get('total_images')}",
         f"- Final split summary: {processed_final_summary.get('splits', {})}",
+        '',
+        '## Validation metrics from training stage',
+        f"- Validation accuracy: {validation_metrics.get('accuracy')}",
+        f"- Validation macro F1: {validation_metrics.get('macro_f1')}",
         '',
         '## Offline model metrics',
         f"- Accuracy: {test_metrics.get('accuracy')}",
@@ -70,6 +76,11 @@ def generate_report() -> dict:
       <body>
         <h1>{report['title']}</h1>
         <p><strong>Generated at:</strong> {created_at}</p>
+        <h2>Validation metrics</h2>
+        <ul>
+          <li>Validation accuracy: {validation_metrics.get('accuracy')}</li>
+          <li>Validation macro F1: {validation_metrics.get('macro_f1')}</li>
+        </ul>
         <h2>Offline metrics</h2>
         <ul>
           <li>Accuracy: {test_metrics.get('accuracy')}</li>

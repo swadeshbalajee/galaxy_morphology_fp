@@ -1,10 +1,16 @@
-
 from __future__ import annotations
 
+import os
 import sqlite3
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
+
+CONFIG_PATH = Path(os.environ.get('APP_CONFIG_PATH', '/opt/airflow/project/config.yaml')).resolve()
+PROJECT_ROOT = Path(os.environ.get('PROJECT_ROOT', str(CONFIG_PATH.parent))).resolve()
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 import requests
 from airflow import DAG
@@ -18,8 +24,10 @@ from src.common.io_utils import read_json, write_json
 from src.common.logging_utils import configure_logging
 
 LOGGER = configure_logging('airflow_control_plane')
-CONFIG = load_config('/opt/airflow/project/config.yaml')
-PROJECT_ROOT = Path('/opt/airflow/project')
+CONFIG = load_config(str(CONFIG_PATH))
+TRAINING_PYTHON = os.environ.get('TRAINING_PYTHON', get_config_value(CONFIG, 'runtime.training_python', '/opt/venvs/training/bin/python'))
+TRAINING_VENV = Path(TRAINING_PYTHON).resolve().parent.parent
+TRAINING_BIN = str(Path(TRAINING_PYTHON).resolve().parent)
 CONTROL_STATE_PATH = PROJECT_ROOT / get_config_value(CONFIG, 'paths.control_plane_state_path', 'artifacts/control_plane_state.json')
 PREDICTIONS_DB_PATH = PROJECT_ROOT / get_config_value(CONFIG, 'paths.predictions_db_path', 'artifacts/predictions.db')
 REPORT_MD_PATH = PROJECT_ROOT / get_config_value(CONFIG, 'paths.latest_report_md_path', 'artifacts/reports/latest_report.md')
@@ -32,15 +40,37 @@ MODELS_DIR = PROJECT_ROOT / get_config_value(CONFIG, 'paths.models_dir', 'models
 DEFAULT_ARGS = {'owner': 'mlops', 'retries': 1}
 
 
-def _run_command(command: list[str]) -> None:
+def _build_env(use_training_venv: bool = False) -> dict[str, str]:
+    env = os.environ.copy()
+    env['APP_CONFIG_PATH'] = str(CONFIG_PATH)
+    env['PROJECT_ROOT'] = str(PROJECT_ROOT)
+    env['PYTHONPATH'] = str(PROJECT_ROOT)
+    if use_training_venv:
+        env['PATH'] = TRAINING_BIN + os.pathsep + env.get('PATH', '')
+        env['VIRTUAL_ENV'] = str(TRAINING_VENV)
+        env['TRAINING_PYTHON'] = TRAINING_PYTHON
+    return env
+
+
+def _run_command(command: list[str], use_training_venv: bool = False) -> None:
     LOGGER.info('Running command: %s', ' '.join(command))
-    result = subprocess.run(command, cwd=str(PROJECT_ROOT), capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        command,
+        cwd=str(PROJECT_ROOT),
+        env=_build_env(use_training_venv=use_training_venv),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     if result.stdout:
         LOGGER.info('STDOUT\n%s', result.stdout)
     if result.stderr:
         LOGGER.warning('STDERR\n%s', result.stderr)
     if result.returncode != 0:
-        raise RuntimeError(f"Command failed with exit code {result.returncode}: {' '.join(command)}")
+        raise RuntimeError(
+            f"Command failed with exit code {result.returncode}: {' '.join(command)}\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
 
 def _feedback_count() -> int:
@@ -105,7 +135,7 @@ def branch_runtime_decision() -> str:
 
 
 def run_dvc_pipeline() -> None:
-    _run_command(['dvc', 'repro', 'report'])
+    _run_command([TRAINING_PYTHON, '-m', 'dvc', 'repro', 'report'], use_training_venv=True)
 
 
 def reload_model_service() -> None:
@@ -129,7 +159,7 @@ with DAG(
     dag_id='galaxy_morphology_control_plane',
     description='Airflow control plane for the DVC-driven galaxy pipeline',
     start_date=datetime(2026, 1, 1),
-    schedule=get_config_value(CONFIG, 'continuous_improvement.monitor_schedule', '*/30 * * * *'),
+    schedule=get_config_value(CONFIG, 'continuous_improvement.monitor_schedule', '30 12 * * *'),
     catchup=False,
     default_args=DEFAULT_ARGS,
     tags=['mlops', 'galaxy', 'control-plane'],

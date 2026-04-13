@@ -1,6 +1,6 @@
 
 project:
-  name: galaxy-mlops
+  name: galaxy-mlops-v2
   display_name: Galaxy Morphology Classification with DVC + Airflow MLOps
   random_seed: 42
 
@@ -20,6 +20,7 @@ paths:
   processed_final_summary_path: artifacts/processed_final_summary.json
   drift_baseline_path: artifacts/drift_baseline.json
   train_metrics_path: artifacts/train_metrics.json
+  validation_metrics_path: artifacts/validation_metrics.json
   test_metrics_path: artifacts/test_metrics.json
   live_metrics_path: artifacts/live_metrics.json
   confusion_matrix_path: artifacts/confusion_matrix.csv
@@ -30,6 +31,8 @@ paths:
 
 runtime:
   config_path_env: APP_CONFIG_PATH
+  project_root_env: PROJECT_ROOT
+  training_python: /opt/venvs/training/bin/python
   max_upload_mb: 10
 
 data:
@@ -85,7 +88,7 @@ continuous_improvement:
   min_new_feedback_samples: 5
   min_total_feedback_samples: 10
   promote_only_if_better_than_current: true
-  monitor_schedule: "*/30 * * * *"
+  monitor_schedule: "30 12 * * *"
 
 reporting:
   include_feedback_metrics: true

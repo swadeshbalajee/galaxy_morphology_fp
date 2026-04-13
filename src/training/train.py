@@ -181,15 +181,15 @@ def train(train_dir: str, val_dir: str, test_dir: str, export_dir: str):
             model.load_state_dict(best_state)
 
         export_local_model(model, export_dir, class_names)
-        test_metrics = evaluate_loader(model, test_loader, device)
+        validation_metrics = evaluate_loader(model, val_loader, device)
         confusion_df = pd.DataFrame(
-            confusion_matrix(test_metrics['targets'], test_metrics['preds'], labels=list(range(len(class_names)))),
+            confusion_matrix(validation_metrics['targets'], validation_metrics['preds'], labels=list(range(len(class_names)))),
             index=class_names,
             columns=class_names,
         )
         confusion_path = resolve_path(config, 'paths.confusion_matrix_path')
         confusion_df.to_csv(confusion_path)
-        classification = classification_report(test_metrics['targets'], test_metrics['preds'], target_names=class_names, output_dict=True, zero_division=0)
+        classification = classification_report(validation_metrics['targets'], validation_metrics['preds'], target_names=class_names, output_dict=True, zero_division=0)
         write_json(resolve_path(config, 'paths.classification_report_path'), classification)
 
         total_duration = time.time() - start_time
@@ -202,17 +202,17 @@ def train(train_dir: str, val_dir: str, test_dir: str, export_dir: str):
             'history': epoch_history,
             'class_names': class_names,
         }
-        test_summary = {
-            'loss': test_metrics['loss'],
-            'accuracy': test_metrics['accuracy'],
-            'precision_macro': test_metrics['precision_macro'],
-            'recall_macro': test_metrics['recall_macro'],
-            'macro_f1': test_metrics['macro_f1'],
+        validation_summary = {
+            'loss': validation_metrics['loss'],
+            'accuracy': validation_metrics['accuracy'],
+            'precision_macro': validation_metrics['precision_macro'],
+            'recall_macro': validation_metrics['recall_macro'],
+            'macro_f1': validation_metrics['macro_f1'],
             'class_names': class_names,
             'model_dir': str(export_dir),
         }
         write_json(resolve_path(config, 'paths.train_metrics_path'), train_metrics)
-        write_json(resolve_path(config, 'paths.test_metrics_path'), test_summary)
+        write_json(resolve_path(config, 'paths.validation_metrics_path'), validation_summary)
         write_json(resolve_path(config, 'paths.pipeline_runtime_summary_path'), {
             'train_duration_seconds': round(total_duration, 3),
             'epochs_completed': len(epoch_history),
@@ -221,16 +221,16 @@ def train(train_dir: str, val_dir: str, test_dir: str, export_dir: str):
             'test_samples': len(test_data),
         })
 
-        mlflow.log_metrics({k: v for k, v in test_summary.items() if isinstance(v, (int, float))})
+        mlflow.log_metrics({f'final_validation_{k}': v for k, v in validation_summary.items() if isinstance(v, (int, float))})
         mlflow.log_artifact(str(confusion_path))
         mlflow.log_artifact(str(resolve_path(config, 'paths.classification_report_path')))
         mlflow.log_artifact(str(resolve_path(config, 'paths.train_metrics_path')))
-        mlflow.log_artifact(str(resolve_path(config, 'paths.test_metrics_path')))
+        mlflow.log_artifact(str(resolve_path(config, 'paths.validation_metrics_path')))
         mlflow.pytorch.log_model(model, artifact_path='model')
         mlflow.log_artifacts(str(export_dir), artifact_path='local_export')
 
-        LOGGER.info('Training finished. train_metrics=%s test_metrics=%s', train_metrics, test_summary)
-        return train_metrics, test_summary
+        LOGGER.info('Training finished. train_metrics=%s validation_metrics=%s', train_metrics, validation_summary)
+        return train_metrics, validation_summary
 
 
 def parse_args() -> argparse.Namespace:

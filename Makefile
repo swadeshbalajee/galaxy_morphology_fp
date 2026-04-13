@@ -7,16 +7,19 @@ down:
 	docker compose down -v
 
 train:
-	docker compose run --rm trainer python -m src.training.train --train-dir data/processed/train --val-dir data/processed/val --test-dir data/processed/test --params params.yaml --export-dir models/latest
+	docker compose exec airflow-api-server /opt/venvs/training/bin/python -m src.training.train
 
-ingest:
-	docker compose run --rm trainer python -m src.data.ingest --source-dir data/external/galaxy_dataset --output-dir data/processed
+fetch-raw:
+	docker compose exec airflow-api-server /opt/venvs/training/bin/python -m dvc repro fetch_raw
+
+preprocess:
+	docker compose exec airflow-api-server /opt/venvs/training/bin/python -m dvc repro preprocess_final
 
 test:
 	python -m pytest tests -q
 
 lint:
-	python -m compileall src api/app model_service/app frontend tests
+	python -m compileall src api/app model_service/app frontend tests airflow/dags
 
 dvc-repro:
-	dvc repro
+	docker compose exec airflow-api-server /opt/venvs/training/bin/python -m dvc repro report

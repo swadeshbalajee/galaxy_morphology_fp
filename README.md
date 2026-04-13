@@ -4,7 +4,7 @@
 This repository is now structured as a **full-stack local MLOps application** where:
 
 - **DVC** is the single source of truth for the artifact pipeline.
-- **Airflow** is the control plane that checks runtime state, decides whether retraining is needed, triggers DVC, reloads the service, and emails the latest report.
+- **Airflow** is the control plane that checks runtime state, decides whether retraining is needed, triggers DVC through an isolated training venv, reloads the service, and emails the latest report.
 - **MLflow** tracks experiments and artifacts.
 - **Prometheus + Grafana + Loki** visualize metrics and logs.
 - **Frontend + API + Model Service** form a loosely coupled serving stack.
@@ -17,7 +17,16 @@ This repository is now structured as a **full-stack local MLOps application** wh
 
 ### Airflow control plane
 
-`inspect runtime -> decide retrain/skip -> dvc repro report -> reload model service -> email latest report`
+`inspect runtime -> decide retrain/skip -> /opt/venvs/training/bin/python -m dvc repro report -> reload model service -> email latest report`
+
+### Environment split
+
+Airflow now uses two Python environments inside the same image:
+
+- the default Airflow environment for DAG parsing, scheduling, and lightweight control-plane utilities
+- an isolated training venv at `/opt/venvs/training` for DVC, MLflow, PyTorch, preprocessing, training, evaluation, and report generation
+
+This avoids Airflow/MLflow dependency conflicts while still letting the DAG trigger the full ML pipeline locally.
 
 ## Why this split?
 
@@ -124,6 +133,11 @@ This project expects you to change behavior by editing `config.yaml`, not by har
 docker compose up --build
 ```
 
+The Airflow image build now does two things:
+
+1. installs lightweight Airflow-only dependencies into the default Airflow environment
+2. creates `/opt/venvs/training` and installs the full ML stack from `requirements/training.txt` there
+
 ## 3.2 Open the services
 
 - Frontend: `http://localhost:8501`
@@ -148,7 +162,13 @@ dvc dag
 ## 4.2 Run the complete pipeline
 
 ```bash
-docker compose exec trainer dvc repro report
+docker compose exec airflow-api-server /opt/venvs/training/bin/python -m dvc repro report
+```
+
+Optional equivalent helper container:
+
+```bash
+docker compose exec airflow-api-server /opt/venvs/training/bin/python -m dvc repro report
 ```
 
 This will run, in order:
@@ -163,7 +183,7 @@ This will run, in order:
 ## 4.3 Push cached artifacts into the local remote
 
 ```bash
-docker compose exec trainer dvc push
+docker compose exec airflow-api-server /opt/venvs/training/bin/python -m dvc push
 ```
 
 ---
@@ -189,7 +209,7 @@ It does this instead:
 4. checks whether performance dropped below threshold
 5. checks whether enough new feedback has arrived
 6. decides whether retraining should happen
-7. if yes, runs `dvc repro report`
+7. if yes, runs `/opt/venvs/training/bin/python -m dvc repro report` with the training venv placed first on `PATH`
 8. reloads the model service
 9. emails the latest report
 
@@ -288,7 +308,13 @@ dvc dag
 ## 8.3 Run DVC pipeline
 
 ```bash
-docker compose exec trainer dvc repro report
+docker compose exec airflow-api-server /opt/venvs/training/bin/python -m dvc repro report
+```
+
+Optional equivalent helper container:
+
+```bash
+docker compose exec airflow-api-server /opt/venvs/training/bin/python -m dvc repro report
 ```
 
 ## 8.4 Show MLflow
@@ -339,19 +365,25 @@ If SMTP is configured, also show the email received with the attached report.
 ## Re-run only from preprocessing onward
 
 ```bash
-docker compose exec trainer dvc repro preprocess_final
+docker compose exec airflow-api-server /opt/venvs/training/bin/python -m dvc repro preprocess_final
 ```
 
 ## Re-run only training onward
 
 ```bash
-docker compose exec trainer dvc repro train
+docker compose exec airflow-api-server /opt/venvs/training/bin/python -m dvc repro train
 ```
 
 ## Regenerate only the report
 
 ```bash
-docker compose exec trainer dvc repro report
+docker compose exec airflow-api-server /opt/venvs/training/bin/python -m dvc repro report
+```
+
+Optional equivalent helper container:
+
+```bash
+docker compose exec airflow-api-server /opt/venvs/training/bin/python -m dvc repro report
 ```
 
 ## Run tests

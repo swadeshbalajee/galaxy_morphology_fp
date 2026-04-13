@@ -20,6 +20,9 @@ x-airflow-common: &airflow-common
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api-server:8080/execution/
     APP_CONFIG_PATH: /opt/airflow/project/config.yaml
+    PROJECT_ROOT: /opt/airflow/project
+    PYTHONPATH: /opt/airflow/project
+    TRAINING_PYTHON: /opt/venvs/training/bin/python
     _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
     _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
     _PIP_ADDITIONAL_REQUIREMENTS: ''
@@ -227,7 +230,8 @@ services:
       bash -lc "pip install --no-cache-dir mlflow==2.22.0 &&
       mlflow server --host 0.0.0.0 --port 5000
       --backend-store-uri sqlite:///mlflow.db
-      --default-artifact-root /mlflow/mlruns"
+      --artifacts-destination /mlflow/mlruns
+      --serve-artifacts"
     ports: ["5000:5000"]
     restart: unless-stopped
 

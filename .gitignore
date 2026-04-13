@@ -17,3 +17,5 @@ data/external/
 models/latest/
 *.sqlite
 .DS_Store
+mlflow/
+mlruns/
