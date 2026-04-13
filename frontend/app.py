@@ -38,8 +38,8 @@ uploaded = st.file_uploader('Upload a galaxy image', type=['png', 'jpg', 'jpeg',
 left, right = st.columns([1, 1])
 with left:
     if uploaded is not None:
-        image = Image.open(uploaded)
-        st.image(image, caption='Uploaded image', use_container_width=True)
+        image = Image.open(uploaded).convert("RGB")
+        st.image(image, caption="Uploaded image")
 
 with right:
     if uploaded is not None and st.button('Predict Morphology', type='primary'):
