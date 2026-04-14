@@ -213,18 +213,18 @@ stages:
       isexec: true
     - path: src/training/evaluate.py
       hash: md5
-      md5: 299fe1b1128e8c530c64cf6fd279f9de
-      size: 4845
+      md5: daea2dc4d92b6381fbdfc738fb10c3e7
+      size: 2628
       isexec: true
     outs:
     - path: artifacts/live_metrics.json
       hash: md5
-      md5: f6873f9ba46233eef69e5e9ce288aef5
-      size: 100
+      md5: a100c9d147170f700130370dce1def57
+      size: 65
     - path: artifacts/test_metrics.json
       hash: md5
-      md5: db680787eefbe6e1e2a4116b56362435
-      size: 305
+      md5: 37c1b7bce5daeb7e14a14ba876326713
+      size: 36
   report:
     cmd: /opt/venvs/training/bin/python -m src.reporting.generate_report
     deps:
@@ -242,8 +242,8 @@ stages:
       size: 1630
     - path: artifacts/test_metrics.json
       hash: md5
-      md5: db680787eefbe6e1e2a4116b56362435
-      size: 305
+      md5: 37c1b7bce5daeb7e14a14ba876326713
+      size: 36
     - path: artifacts/train_metrics.json
       hash: md5
       md5: 20a9413b08d5fe6c1b1844ef9ef65608
@@ -274,15 +274,15 @@ stages:
       isexec: true
     - path: src/training/evaluate.py
       hash: md5
-      md5: 299fe1b1128e8c530c64cf6fd279f9de
-      size: 4845
+      md5: daea2dc4d92b6381fbdfc738fb10c3e7
+      size: 2628
       isexec: true
     outs:
     - path: artifacts/reports/latest_report.html
       hash: md5
-      md5: 3607fd991e199437d048b4d90ff8bf3e
-      size: 924
+      md5: 5cf25b3140451c75201367cef1f828f8
+      size: 896
     - path: artifacts/reports/latest_report.md
       hash: md5
-      md5: 7a0fddf6d1a71d9f5f420c00786ae34b
-      size: 1217
+      md5: 6887f27f651057c2b303eada871eeb49
+      size: 1189

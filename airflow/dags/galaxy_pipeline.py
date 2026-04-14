@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import sqlite3
 import subprocess
 import sys
 from datetime import datetime
@@ -22,6 +21,7 @@ from src.common.config import get_config_value, load_config
 from src.common.email_utils import send_email_report
 from src.common.io_utils import read_json, write_json
 from src.common.logging_utils import configure_logging
+from src.common.postgres import get_db_connection, initialize_database
 
 LOGGER = configure_logging('airflow_control_plane')
 CONFIG = load_config(str(CONFIG_PATH))
@@ -29,7 +29,6 @@ TRAINING_PYTHON = os.environ.get('TRAINING_PYTHON', get_config_value(CONFIG, 'ru
 TRAINING_VENV = Path(TRAINING_PYTHON).resolve().parent.parent
 TRAINING_BIN = str(Path(TRAINING_PYTHON).resolve().parent)
 CONTROL_STATE_PATH = PROJECT_ROOT / get_config_value(CONFIG, 'paths.control_plane_state_path', 'artifacts/control_plane_state.json')
-PREDICTIONS_DB_PATH = PROJECT_ROOT / get_config_value(CONFIG, 'paths.predictions_db_path', 'artifacts/predictions.db')
 REPORT_MD_PATH = PROJECT_ROOT / get_config_value(CONFIG, 'paths.latest_report_md_path', 'artifacts/reports/latest_report.md')
 REPORT_HTML_PATH = PROJECT_ROOT / get_config_value(CONFIG, 'paths.latest_report_html_path', 'artifacts/reports/latest_report.html')
 TEST_METRICS_PATH = PROJECT_ROOT / get_config_value(CONFIG, 'paths.test_metrics_path', 'artifacts/test_metrics.json')
@@ -74,10 +73,15 @@ def _run_command(command: list[str], use_training_venv: bool = False) -> None:
 
 
 def _feedback_count() -> int:
-    if not PREDICTIONS_DB_PATH.exists():
+    try:
+        initialize_database()
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT COUNT(*) FROM feedback_corrections')
+                return int(cur.fetchone()[0])
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning('Unable to read feedback count from Postgres: %s', exc)
         return 0
-    with sqlite3.connect(PREDICTIONS_DB_PATH) as conn:
-        return int(conn.execute('SELECT COUNT(*) FROM feedback').fetchone()[0])
 
 
 def inspect_runtime_state() -> dict:

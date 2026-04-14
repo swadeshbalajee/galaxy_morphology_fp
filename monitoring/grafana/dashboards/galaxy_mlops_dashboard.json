@@ -1,27 +1,346 @@
-
 {
-  "annotations": {"list": []},
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "graphTooltip": 0,
   "panels": [
-    {"type": "timeseries", "title": "API Requests per Second", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}, "targets": [{"expr": "sum(rate(galaxy_api_requests_total[1m]))", "refId": "A"}]},
-    {"type": "timeseries", "title": "Model Latency P95", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}, "targets": [{"expr": "histogram_quantile(0.95, sum(rate(galaxy_model_latency_seconds_bucket[5m])) by (le))", "refId": "A"}]},
-    {"type": "stat", "title": "Offline Test Accuracy", "gridPos": {"h": 6, "w": 6, "x": 0, "y": 8}, "targets": [{"expr": "galaxy_pipeline_test_accuracy", "refId": "A"}]},
-    {"type": "stat", "title": "Live Feedback Accuracy", "gridPos": {"h": 6, "w": 6, "x": 6, "y": 8}, "targets": [{"expr": "galaxy_live_feedback_accuracy", "refId": "A"}]},
-    {"type": "stat", "title": "Model Ready", "gridPos": {"h": 6, "w": 6, "x": 12, "y": 8}, "targets": [{"expr": "galaxy_model_ready", "refId": "A"}]},
-    {"type": "stat", "title": "API Ready", "gridPos": {"h": 6, "w": 6, "x": 18, "y": 8}, "targets": [{"expr": "galaxy_api_ready", "refId": "A"}]},
-    {"type": "timeseries", "title": "Brightness Drift Z-Score", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14}, "targets": [{"expr": "galaxy_input_brightness_zscore", "refId": "A"}]},
-    {"type": "timeseries", "title": "Training Duration", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14}, "targets": [{"expr": "galaxy_pipeline_train_duration_seconds", "refId": "A"}]},
-    {"type": "timeseries", "title": "Raw Images by Class", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22}, "targets": [{"expr": "galaxy_raw_images_total", "legendFormat": "{{label}}", "refId": "A"}]},
-    {"type": "timeseries", "title": "Tracked Log File Size", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22}, "targets": [{"expr": "galaxy_log_file_bytes", "legendFormat": "{{log_file}}", "refId": "A"}]},
-    {"datasource": {"type": "loki", "uid": "-- Grafana --"}, "type": "logs", "title": "Application Logs", "gridPos": {"h": 10, "w": 24, "x": 0, "y": 30}, "targets": [{"expr": "{job=~"project-logs|airflow-logs"}", "refId": "A"}]}
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "type": "timeseries",
+      "title": "API Requests per Second",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(galaxy_api_requests_total[1m]))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "type": "timeseries",
+      "title": "API Latency P95",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(galaxy_api_request_latency_seconds_bucket[5m])) by (le, endpoint))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "type": "stat",
+      "title": "Offline Test Accuracy",
+      "gridPos": {
+        "h": 6,
+        "w": 3,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "galaxy_pipeline_test_accuracy",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "type": "stat",
+      "title": "Live Feedback Accuracy",
+      "gridPos": {
+        "h": 6,
+        "w": 3,
+        "x": 3,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "galaxy_live_feedback_accuracy",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "type": "stat",
+      "title": "API Ready",
+      "gridPos": {
+        "h": 6,
+        "w": 3,
+        "x": 6,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "galaxy_api_ready",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "type": "stat",
+      "title": "DB Ready",
+      "gridPos": {
+        "h": 6,
+        "w": 3,
+        "x": 9,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "galaxy_db_ready",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "type": "stat",
+      "title": "Model Ready",
+      "gridPos": {
+        "h": 6,
+        "w": 3,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "galaxy_model_ready",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "type": "stat",
+      "title": "Feedback Count",
+      "gridPos": {
+        "h": 6,
+        "w": 3,
+        "x": 15,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "galaxy_live_feedback_count",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "type": "stat",
+      "title": "Predictions in DB",
+      "gridPos": {
+        "h": 6,
+        "w": 3,
+        "x": 18,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "galaxy_db_prediction_count",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "type": "stat",
+      "title": "Corrections in DB",
+      "gridPos": {
+        "h": 6,
+        "w": 3,
+        "x": 21,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "galaxy_db_correction_count",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "type": "timeseries",
+      "title": "Predictions Stored Rate",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 14
+      },
+      "targets": [
+        {
+          "expr": "increase(galaxy_predictions_rows_stored_total[1h])",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "type": "timeseries",
+      "title": "Corrections Stored Rate",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 14
+      },
+      "targets": [
+        {
+          "expr": "increase(galaxy_feedback_correction_rows_total[1h])",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "type": "timeseries",
+      "title": "CSV Validation Failures",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 14
+      },
+      "targets": [
+        {
+          "expr": "increase(galaxy_feedback_csv_validation_failures_total[1h])",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "type": "timeseries",
+      "title": "Brightness Drift Z-Score",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "targets": [
+        {
+          "expr": "galaxy_input_brightness_zscore",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "type": "timeseries",
+      "title": "Tracked Log File Size",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "targets": [
+        {
+          "expr": "galaxy_log_file_bytes",
+          "legendFormat": "{{log_file}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "type": "logs",
+      "title": "Application Logs",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "targets": [
+        {
+          "expr": "{job=~\"project-logs|airflow-logs\"}",
+          "refId": "A"
+        }
+      ]
+    }
   ],
   "schemaVersion": 39,
   "style": "dark",
-  "tags": ["galaxy", "mlops"],
-  "templating": {"list": []},
-  "time": {"from": "now-6h", "to": "now"},
+  "tags": [
+    "galaxy",
+    "mlops"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "timezone": "browser",
   "title": "Galaxy Morphology MLOps Dashboard",
-  "version": 2
+  "version": 3
 }

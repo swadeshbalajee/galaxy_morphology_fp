@@ -7,6 +7,6 @@ RUN python -m venv /opt/venvs/training     && /opt/venvs/training/bin/pip instal
 USER airflow
 COPY requirements/airflow.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir "apache-airflow==${AIRFLOW_VERSION}" -r /tmp/requirements.txt
-
+RUN pip install --no-cache-dir "psycopg[binary]==3.2.13"
 ENV TRAINING_PYTHON=/opt/venvs/training/bin/python
 WORKDIR /opt/airflow

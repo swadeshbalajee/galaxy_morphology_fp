@@ -1,0 +1,21 @@
+global:
+  smtp_smarthost: '${MAILTRAP_SMTP_HOST}:${MAILTRAP_SMTP_PORT}'
+  smtp_from: '${MAILTRAP_FROM_EMAIL}'
+  smtp_auth_username: '${MAILTRAP_SMTP_USERNAME}'
+  smtp_auth_password: '${MAILTRAP_SMTP_PASSWORD}'
+  smtp_require_tls: false
+
+route:
+  receiver: mailtrap-email
+  group_by: ['alertname', 'severity']
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 2h
+
+receivers:
+  - name: mailtrap-email
+    email_configs:
+      - to: '${ALERT_EMAIL_TO}'
+        send_resolved: true
+        headers:
+          subject: '[Galaxy MLOps] {{ .CommonLabels.severity | toUpper }} {{ .CommonLabels.alertname }}'

@@ -3,7 +3,13 @@
 
 ## High priority
 - [ ] Configure SMTP in `.env` if report email demo is required
-- [ ] Verify MLflow artifacts
+- [ ] MLflow DB connection is failing check that.
+- [ ] Setup alert manager
+- [ ] Test UI and the recent predictions is not showing the table correctly.
+- [ ] Fix Adminer SQL UI.
+
+
+## End Tasks
 - [ ] Confirm report generation and email delivery
 - [ ] Confirm Grafana metrics panels
 - [ ] Confirm Loki log panels

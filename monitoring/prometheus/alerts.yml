@@ -1,4 +1,3 @@
-
 groups:
   - name: galaxy-mlops-alerts
     rules:
@@ -9,6 +8,16 @@ groups:
           severity: critical
         annotations:
           summary: API gateway is not ready
+          description: The API gateway readiness gauge is zero for more than one minute.
+
+      - alert: GalaxyDBUnavailable
+        expr: galaxy_db_ready == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Postgres connectivity failed from the API layer
+          description: The API could not complete its database readiness check.
 
       - alert: GalaxyModelUnavailable
         expr: galaxy_model_ready == 0
@@ -17,6 +26,7 @@ groups:
           severity: critical
         annotations:
           summary: Model service is not ready
+          description: The model service readiness gauge is zero for more than one minute.
 
       - alert: GalaxyDriftHigh
         expr: abs(galaxy_input_brightness_zscore) > 3
@@ -25,11 +35,31 @@ groups:
           severity: warning
         annotations:
           summary: Input drift brightness z-score exceeded threshold
+          description: The latest input brightness drift z-score stayed above 3 for two minutes.
 
       - alert: GalaxyLiveAccuracyLow
-        expr: galaxy_live_feedback_accuracy < 0.85
+        expr: galaxy_live_feedback_accuracy < 0.85 and galaxy_live_feedback_count >= 5
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: Live feedback accuracy dropped below threshold
+          description: Live accuracy is below 0.85 while feedback sample size is at least 5.
+
+      - alert: GalaxyAPILatencyHigh
+        expr: histogram_quantile(0.95, sum(rate(galaxy_api_request_latency_seconds_bucket[5m])) by (le, endpoint)) > 1.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: API latency p95 is high
+          description: API latency p95 stayed above 1.5 seconds for five minutes.
+
+      - alert: GalaxyCSVValidationFailuresSpike
+        expr: increase(galaxy_feedback_csv_validation_failures_total[15m]) > 0
+        for: 1m
+        labels:
+          severity: info
+        annotations:
+          summary: One or more correction CSV uploads failed validation
+          description: Review the frontend popup and API logs for row-level CSV validation errors.

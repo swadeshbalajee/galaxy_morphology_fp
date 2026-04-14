@@ -2,3 +2,4 @@ apache-airflow-providers-standard
 requests>=2.31,<3
 PyYAML==6.0.2
 dvc==3.57.0
+psycopg[binary]==3.2.13

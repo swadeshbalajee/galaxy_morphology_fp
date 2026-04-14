@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from fastapi import FastAPI, Response
@@ -7,9 +6,10 @@ from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Gauge, gen
 from src.common.config import load_config, resolve_path
 from src.common.io_utils import read_json
 from src.common.logging_utils import configure_logging
+from src.common.postgres import get_db_connection, initialize_database
 
-LOGGER = configure_logging("pipeline_exporter")
-app = FastAPI(title="Galaxy Pipeline Exporter", version="1.0.0")
+LOGGER = configure_logging('pipeline_exporter')
+app = FastAPI(title='Galaxy Pipeline Exporter', version='1.1.0')
 
 
 @app.get('/health')
@@ -30,6 +30,8 @@ def metrics():
     g_train_duration = Gauge('galaxy_pipeline_train_duration_seconds', 'Latest train duration.', registry=registry)
     g_raw_count = Gauge('galaxy_raw_images_total', 'Raw materialized images by class.', ['label'], registry=registry)
     g_log_size = Gauge('galaxy_log_file_bytes', 'Tracked log file size.', ['log_file'], registry=registry)
+    g_prediction_db_count = Gauge('galaxy_db_prediction_count', 'Total predictions stored in Postgres.', registry=registry)
+    g_correction_db_count = Gauge('galaxy_db_correction_count', 'Total corrections stored in Postgres.', registry=registry)
 
     test_metrics = read_json(resolve_path(config, 'paths.test_metrics_path'), {})
     live_metrics = read_json(resolve_path(config, 'paths.live_metrics_path'), {})
@@ -59,5 +61,16 @@ def metrics():
     if airflow_logs_dir.exists():
         total_size = sum(p.stat().st_size for p in airflow_logs_dir.rglob('*') if p.is_file())
         g_log_size.labels(log_file='airflow_total').set(float(total_size))
+
+    try:
+        initialize_database()
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT COUNT(*) FROM predictions')
+                g_prediction_db_count.set(float(cur.fetchone()[0]))
+                cur.execute('SELECT COUNT(*) FROM feedback_corrections')
+                g_correction_db_count.set(float(cur.fetchone()[0]))
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning('Unable to collect Postgres-backed exporter metrics: %s', exc)
 
     return Response(generate_latest(registry), media_type=CONTENT_TYPE_LATEST)

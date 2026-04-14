@@ -17,6 +17,7 @@ data/external/
 models/latest/
 *.sqlite
 .DS_Store
-mlflow/
 mlruns/
 .dvc/storage/
+.dvc/cache/
+.dvc/tmp/
