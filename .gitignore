@@ -14,6 +14,7 @@ logs/
 data/raw/
 data/processed/
 data/external/
+data/feedback/
 models/latest/
 *.sqlite
 .DS_Store
@@ -21,3 +22,4 @@ mlruns/
 .dvc/storage/
 .dvc/cache/
 .dvc/tmp/
+todo.md

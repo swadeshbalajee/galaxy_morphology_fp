@@ -7,6 +7,7 @@
 - [ ] Setup alert manager
 - [ ] Test UI and the recent predictions is not showing the table correctly.
 - [ ] Fix Adminer SQL UI.
+- [ ] Add UML diagram and other development documentations.
 
 
 ## End Tasks
