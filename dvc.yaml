@@ -48,6 +48,9 @@ stages:
       - src/common/io_utils.py
       - config.yaml
       - data/processed/final
+      - data/feedback/training_feedback
+      - artifacts/feedback_training_manifest.csv
+      - artifacts/feedback_training_summary.json
     outs:
       - models/latest
     metrics:

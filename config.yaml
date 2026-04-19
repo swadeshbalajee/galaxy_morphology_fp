@@ -9,6 +9,7 @@ paths:
   raw_dataset_dir: data/raw/galaxy_dataset
   processed_v1_dir: data/processed/v1
   processed_final_dir: data/processed/final
+  feedback_training_dir: data/feedback/training_feedback
   artifacts_dir: artifacts
   reports_dir: artifacts/reports
   models_dir: models/latest
@@ -23,11 +24,14 @@ paths:
   validation_metrics_path: artifacts/validation_metrics.json
   test_metrics_path: artifacts/test_metrics.json
   live_metrics_path: artifacts/live_metrics.json
+  feedback_training_manifest_path: artifacts/feedback_training_manifest.csv
+  feedback_training_summary_path: artifacts/feedback_training_summary.json
   confusion_matrix_path: artifacts/confusion_matrix.csv
   classification_report_path: artifacts/classification_report.json
   latest_report_md_path: artifacts/reports/latest_report.md
   latest_report_html_path: artifacts/reports/latest_report.html
   pipeline_runtime_summary_path: artifacts/pipeline_runtime_summary.json
+  registry_status_path: artifacts/model_registry_status.json
 
 runtime:
   config_path_env: APP_CONFIG_PATH
@@ -52,8 +56,8 @@ data:
   train_split: 0.70
   val_split: 0.15
   test_split: 0.15
-  max_images_per_class: 1000
-  target_images_per_class: 1000
+  max_images_per_class: 500
+  target_images_per_class: 500
   min_required_class_count: 5
   allowed_suffixes: [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
   normalize_mean: [0.485, 0.456, 0.406]
@@ -114,3 +118,14 @@ services:
   prometheus_url: http://prometheus:9090
   grafana_url: http://grafana:3000
   loki_url: http://loki:3100
+
+registry:
+  model_name: galaxy_morphology_classifier
+  champion_alias: champion
+  artifact_subpath: local_export
+  comparison_metric: macro_f1
+  comparison_metric_sources:
+    - test_metrics
+    - validation_metrics
+  promote_only_if_better_than_current: true
+  serving_model_uri: models:/galaxy_morphology_classifier@champion

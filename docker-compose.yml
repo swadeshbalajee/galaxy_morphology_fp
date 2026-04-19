@@ -23,7 +23,8 @@ x-airflow-common: &airflow-common
     PYTHONPATH: /opt/airflow/project
     TRAINING_PYTHON: /opt/venvs/training/bin/python
     DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy_app
-    MLFLOW_BACKEND_STORE_URI: postgresql+psycopg://mlflow:mlflow@postgres:5432/mlflow
+    MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
+    MLFLOW_TRACKING_URI: http://mlflow:5000
     _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
     _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
     _PIP_ADDITIONAL_REQUIREMENTS: ''
@@ -160,7 +161,8 @@ services:
     environment:
       APP_CONFIG_PATH: /app/config.yaml
       DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy_app
-      MLFLOW_BACKEND_STORE_URI: postgresql+psycopg://mlflow:mlflow@postgres:5432/mlflow
+      MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
+      MLFLOW_TRACKING_URI: http://mlflow:5000
     working_dir: /app
     volumes:
       - ./:/app
@@ -193,6 +195,8 @@ services:
     env_file: [.env]
     environment:
       APP_CONFIG_PATH: /app/config.yaml
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MODEL_URI: models:/galaxy_morphology_classifier@champion
     working_dir: /app
     volumes:
       - ./:/app
@@ -238,6 +242,8 @@ services:
     env_file: [.env]
     environment:
       APP_CONFIG_PATH: /app/config.yaml
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MODEL_URI: models:/galaxy_morphology_classifier@champion
     working_dir: /app
     volumes:
       - ./:/app
@@ -250,20 +256,22 @@ services:
   mlflow:
     build:
       context: .
-      dockerfile: mlflow/Dockerfile
+      dockerfile: mlflow_server/Dockerfile
     env_file: [.env]
     environment:
-      MLFLOW_BACKEND_STORE_URI: postgresql+psycopg://mlflow:mlflow@postgres:5432/mlflow
+      MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_SERVER_ALLOWED_HOSTS: ${MLFLOW_SERVER_ALLOWED_HOSTS:-mlflow,mlflow:5000,localhost,localhost:5000,127.0.0.1,127.0.0.1:5000}
     working_dir: /mlflow
     volumes:
-      - ./mlflow:/mlflow
+      - ./mlflow_server:/mlflow
       - mlruns:/mlflow/mlruns
     command:
       [
         "mlflow", "server",
         "--host", "0.0.0.0",
         "--port", "5000",
-        "--backend-store-uri", "postgresql+psycopg://mlflow:mlflow@postgres:5432/mlflow",
+        "--backend-store-uri", "postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow",
         "--artifacts-destination", "/mlflow/mlruns",
         "--serve-artifacts"
       ]

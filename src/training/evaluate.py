@@ -2,28 +2,77 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sklearn.metrics import accuracy_score, f1_score
+import mlflow.pytorch
+import torch
+import torch.nn as nn
+from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_support
+from torch.utils.data import DataLoader
+from torchvision import datasets
 
-from src.common.config import load_config, resolve_path
+from src.common.config import get_config_value, load_config, resolve_path
 from src.common.io_utils import read_json, write_json
 from src.common.logging_utils import configure_logging
 from src.common.postgres import get_db_connection, initialize_database
+from src.training.train import make_transforms
 
 LOGGER = configure_logging('evaluation')
+
+
+def _row_value(row, key: str, index: int):
+    if isinstance(row, dict):
+        return row[key]
+    return row[index]
 
 
 def evaluate_offline() -> dict:
     config = load_config()
     metrics_path = resolve_path(config, 'paths.test_metrics_path')
-    metrics = read_json(metrics_path, {}) or {}
-
-    # Always ensure the file exists, even if empty/default
-    if not metrics:
+    model_dir = resolve_path(config, 'paths.models_dir')
+    test_dir = resolve_path(config, 'paths.processed_final_dir') / 'test'
+    if not model_dir.exists() or not test_dir.exists():
         metrics = {
-            'status': 'no_offline_metrics',
+            'status': 'offline_artifacts_missing',
+            'model_dir': str(model_dir),
+            'test_dir': str(test_dir),
         }
         write_json(metrics_path, metrics)
+        LOGGER.warning('Offline evaluation skipped: %s', metrics)
+        return metrics
 
+    transform = make_transforms(config)
+    batch_size = int(get_config_value(config, 'training.batch_size', 32))
+    num_workers = int(get_config_value(config, 'training.num_workers', 0))
+    test_data = datasets.ImageFolder(test_dir, transform=transform)
+    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    model = mlflow.pytorch.load_model(str(model_dir))
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+    model.eval()
+
+    criterion = nn.CrossEntropyLoss()
+    targets: list[int] = []
+    preds: list[int] = []
+    total_loss = 0.0
+    with torch.no_grad():
+        for images, labels in test_loader:
+            images, labels = images.to(device), labels.to(device)
+            logits = model(images)
+            total_loss += criterion(logits, labels).item() * images.size(0)
+            preds.extend(torch.argmax(logits, dim=1).cpu().tolist())
+            targets.extend(labels.cpu().tolist())
+
+    precision, recall, macro_f1, _ = precision_recall_fscore_support(targets, preds, average='macro', zero_division=0)
+    metrics = {
+        'loss': total_loss / max(len(test_loader.dataset), 1),
+        'accuracy': round(float(accuracy_score(targets, preds)), 6),
+        'precision_macro': round(float(precision), 6),
+        'recall_macro': round(float(recall), 6),
+        'macro_f1': round(float(macro_f1), 6),
+        'class_names': test_data.classes,
+        'test_samples': len(test_data),
+        'model_dir': str(model_dir),
+    }
+    write_json(metrics_path, metrics)
     LOGGER.info('Offline evaluation snapshot: %s', metrics)
     return metrics
 
@@ -59,8 +108,8 @@ def evaluate_live_feedback(predictions_db_path: str | Path | None = None) -> dic
         LOGGER.info('No live feedback rows available.')
         return metrics
 
-    y_pred = [row[0] for row in rows]
-    y_true = [row[1] for row in rows]
+    y_pred = [_row_value(row, 'predicted_label', 0) for row in rows]
+    y_true = [_row_value(row, 'corrected_label', 1) for row in rows]
     metrics = {
         'feedback_count': len(rows),
         'accuracy': round(float(accuracy_score(y_true, y_pred)), 6),

@@ -1,8 +1,7 @@
-
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
+from datetime import UTC, datetime
 
 from src.common.config import get_config_value, load_config, resolve_path
 from src.common.io_utils import read_json, write_json
@@ -10,6 +9,10 @@ from src.common.logging_utils import configure_logging
 from src.training.evaluate import evaluate_live_feedback
 
 LOGGER = configure_logging("reporting")
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(UTC).isoformat().replace('+00:00', 'Z')
 
 
 def generate_report() -> dict:
@@ -22,8 +25,10 @@ def generate_report() -> dict:
     test_metrics = read_json(resolve_path(config, 'paths.test_metrics_path'), {})
     live_metrics = evaluate_live_feedback()
     runtime_summary = read_json(resolve_path(config, 'paths.pipeline_runtime_summary_path'), {})
+    registry_status = read_json(resolve_path(config, 'paths.registry_status_path'), {})
+    registry_data = registry_status if isinstance(registry_status, dict) else {}
 
-    created_at = datetime.utcnow().isoformat() + 'Z'
+    created_at = _utc_now_iso()
     report = {
         'generated_at': created_at,
         'title': get_config_value(config, 'reporting.report_title', 'Galaxy report'),
@@ -35,7 +40,11 @@ def generate_report() -> dict:
         'test_metrics': test_metrics,
         'live_metrics': live_metrics,
         'runtime_summary': runtime_summary,
+        'registry_status': registry_status,
     }
+
+    candidate = registry_data.get('candidate') or {}
+    previous = registry_data.get('previous_champion') or {}
 
     md_lines = [
         f"# {report['title']}",
@@ -44,7 +53,7 @@ def generate_report() -> dict:
         '',
         '## Pipeline flow',
         'DVC owns the data -> preprocess v1 -> preprocess final -> train -> evaluate -> report artifact flow.',
-        'Airflow acts as the control plane for monitoring, retraining decisions, report delivery, and service reloads.',
+        'Airflow acts as the control plane for monitoring, retraining decisions, registry promotion, report delivery, and service reloads.',
         '',
         '## Data summary',
         f"- Raw counts: {raw_summary.get('actual_counts', {})}",
@@ -60,6 +69,17 @@ def generate_report() -> dict:
         f"- Macro F1: {test_metrics.get('macro_f1')}",
         f"- Precision macro: {test_metrics.get('precision_macro')}",
         f"- Recall macro: {test_metrics.get('recall_macro')}",
+        '',
+        '## Model registry decision',
+        f"- Candidate version: {candidate.get('version')}",
+        f"- Candidate run id: {candidate.get('run_id')}",
+        f"- Candidate metric ({candidate.get('metric_name')}): {candidate.get('metric_value')}",
+        f"- Previous champion version: {previous.get('version')}",
+        f"- Previous champion metric ({previous.get('metric_name')}): {previous.get('metric_value')}",
+        f"- Champion updated: {registry_data.get('champion_updated')}",
+        f"- Current champion version: {registry_data.get('current_champion_version')}",
+        f"- Serving model URI: {registry_data.get('serving_model_uri')}",
+        f"- Decision reason: {registry_data.get('decision_reason')}",
         '',
         '## Continuous improvement metrics',
         f"- Feedback count: {live_metrics.get('feedback_count')}",
@@ -87,6 +107,17 @@ def generate_report() -> dict:
           <li>Macro F1: {test_metrics.get('macro_f1')}</li>
           <li>Precision macro: {test_metrics.get('precision_macro')}</li>
           <li>Recall macro: {test_metrics.get('recall_macro')}</li>
+        </ul>
+        <h2>Registry decision</h2>
+        <ul>
+          <li>Candidate version: {candidate.get('version')}</li>
+          <li>Candidate metric ({candidate.get('metric_name')}): {candidate.get('metric_value')}</li>
+          <li>Previous champion version: {previous.get('version')}</li>
+          <li>Previous champion metric ({previous.get('metric_name')}): {previous.get('metric_value')}</li>
+          <li>Champion updated: {registry_data.get('champion_updated')}</li>
+          <li>Current champion version: {registry_data.get('current_champion_version')}</li>
+          <li>Serving model URI: {registry_data.get('serving_model_uri')}</li>
+          <li>Decision reason: {registry_data.get('decision_reason')}</li>
         </ul>
         <h2>Continuous improvement</h2>
         <ul>

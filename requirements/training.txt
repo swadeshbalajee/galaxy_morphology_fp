@@ -10,10 +10,11 @@ pandas==2.2.2
 scikit-learn==1.5.2
 matplotlib==3.9.2
 pyyaml==6.0.2
-mlflow==2.16.2
+mlflow==3.11.1
 torch==2.4.1
 torchvision==0.19.1
 prometheus-client==0.21.0
 streamlit==1.39.0
 requests==2.32.3
 dvc==3.57.0
+psycopg[binary]==3.2.13

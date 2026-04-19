@@ -10,6 +10,7 @@ from typing import Any
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from src.common.config import get_config_value, load_config
 from src.common.logging_utils import configure_logging
 from src.common.postgres import cluster_table, get_db_connection, initialize_database
 
@@ -30,6 +31,15 @@ FEEDBACK_UPLOAD_COLUMNS = RECENT_PREDICTION_COLUMNS + ['corrected_label']
 class FeedbackStore:
     def __init__(self):
         initialize_database()
+        self.allowed_labels = {str(label).strip().lower() for label in get_config_value(load_config(), 'data.classes', [])}
+
+    def _normalize_feedback_label(self, label: str) -> str:
+        normalized = str(label).strip().lower()
+        if normalized not in self.allowed_labels:
+            raise ValueError(
+                f"Corrected label must be one of: {', '.join(sorted(self.allowed_labels))}."
+            )
+        return normalized
 
     @staticmethod
     def _normalize_date_bounds(start_date: date | None, end_date: date | None) -> tuple[datetime | None, datetime | None]:
@@ -90,6 +100,7 @@ class FeedbackStore:
         return prediction_id
 
     def add_feedback(self, prediction_id: str, ground_truth_label: str, notes: str | None = None) -> None:
+        ground_truth_label = self._normalize_feedback_label(ground_truth_label)
         with get_db_connection() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
@@ -197,11 +208,11 @@ class FeedbackStore:
 
     def feedback_summary(self) -> dict[str, int]:
         with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute('SELECT COUNT(*) FROM predictions')
-                prediction_count = int(cur.fetchone()[0])
-                cur.execute('SELECT COUNT(*) FROM feedback_corrections')
-                feedback_count = int(cur.fetchone()[0])
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute('SELECT COUNT(*) AS prediction_count FROM predictions')
+                prediction_count = int(cur.fetchone()['prediction_count'])
+                cur.execute('SELECT COUNT(*) AS feedback_count FROM feedback_corrections')
+                feedback_count = int(cur.fetchone()['feedback_count'])
         return {
             'prediction_count': prediction_count,
             'feedback_count': feedback_count,
@@ -232,6 +243,12 @@ class FeedbackStore:
 
             predicted_label = normalized.get('predicted_label', '')
             corrected_label = normalized.get('corrected_label', '')
+            if corrected_label:
+                try:
+                    corrected_label = self._normalize_feedback_label(corrected_label)
+                    normalized['corrected_label'] = corrected_label
+                except ValueError as exc:
+                    errors.append({'row_number': row_number, 'error': str(exc)})
             if predicted_label and corrected_label and predicted_label == corrected_label:
                 errors.append({'row_number': row_number, 'error': '`predicted_label` must be different from `corrected_label`.'})
 

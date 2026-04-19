@@ -19,6 +19,7 @@ This version upgrades the stack in five important ways:
 - Recent predictions can be filtered by date range in the UI.
 - Filtered predictions can be downloaded as a CSV template for corrections.
 - Correction CSV upload validates the file before inserting rows into Postgres.
+- Accepted feedback can be materialized into a **DVC-tracked training snapshot** once the configured feedback threshold is reached.
 
 ### Database changes
 
@@ -98,7 +99,7 @@ Edit `.env` and set at least these values:
 
 ```env
 DATABASE_URL=postgresql://galaxy:galaxy@postgres:5432/galaxy_app
-MLFLOW_BACKEND_STORE_URI=postgresql+psycopg://mlflow:mlflow@postgres:5432/mlflow
+MLFLOW_BACKEND_STORE_URI=postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
 MAILTRAP_SMTP_HOST=sandbox.smtp.mailtrap.io
 MAILTRAP_SMTP_PORT=2525
 MAILTRAP_SMTP_USERNAME=YOUR_MAILTRAP_USERNAME
@@ -296,7 +297,7 @@ If validation succeeds:
 ## Run the DVC pipeline manually
 
 ```bash
-docker compose exec airflow-api-server /opt/venvs/training/bin/python -m dvc repro report
+docker compose exec -w /opt/airflow/project airflow-worker /opt/venvs/training/bin/python -m dvc repro report
 ```
 
 ## Trigger Airflow control plane
@@ -306,6 +307,50 @@ Open Airflow and trigger:
 `galaxy_morphology_control_plane`
 
 The Airflow DAG now reads live feedback count from Postgres instead of SQLite.
+
+## Feedback-driven retraining
+
+Accepted feedback is stored in Postgres first.
+
+Before `dvc repro report` runs, the Airflow control plane checks how many new accepted feedback rows have been added since the last feedback snapshot used for training.
+
+The threshold is controlled by:
+
+- `continuous_improvement.min_new_feedback_samples` in `config.yaml`
+
+When the number of new feedback rows is below that threshold:
+
+- the feedback training snapshot is not refreshed
+- `train` does not rerun because of feedback alone
+
+When the threshold is reached or exceeded:
+
+- feedback images are materialized into `data/feedback/training_feedback`
+- a manifest is written to `artifacts/feedback_training_manifest.csv`
+- a summary is written to `artifacts/feedback_training_summary.json`
+- the `train` stage sees changed DVC dependencies and retrains with those feedback samples included
+
+The training code appends those materialized feedback samples to the normal `data/processed/final/train` dataset during model training.
+
+## Git and DVC note
+
+Commit:
+
+- source code changes
+- config changes
+- `dvc.yaml`
+- `dvc.lock`
+
+Do not commit:
+
+- `data/raw/**`
+- `data/processed/**`
+- `data/feedback/training_feedback/**`
+- `artifacts/**`
+- `models/latest/**`
+- runtime `mlruns/**` contents
+
+`dvc.lock` should be committed after a successful repro so the current pipeline state is reproducible for the next clone.
 
 ---
 
@@ -556,3 +601,8 @@ For evaluation/demo recording, show this order:
 10. Open Prometheus targets
 11. Open Grafana dashboard and logs
 12. Trigger an alert test and show Mailtrap receiving the email
+
+
+## MLflow 3 registry
+
+This repo now targets MLflow 3.11.1 and uses a `champion` model alias for serving (`models:/galaxy_morphology_classifier@champion`).

@@ -1,45 +1,52 @@
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-
-CONFIG_PATH = Path(os.environ.get('APP_CONFIG_PATH', '/opt/airflow/project/config.yaml')).resolve()
-PROJECT_ROOT = Path(os.environ.get('PROJECT_ROOT', str(CONFIG_PATH.parent))).resolve()
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 import requests
 from airflow import DAG
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.providers.standard.operators.python import BranchPythonOperator, PythonOperator
-from airflow.utils.trigger_rule import TriggerRule
+from airflow.task.trigger_rule import TriggerRule
 
-from src.common.config import get_config_value, load_config
-from src.common.email_utils import send_email_report
+PROJECT_ROOT = Path('/opt/airflow/project')
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.common.config import get_config_value, load_config, resolve_path
 from src.common.io_utils import read_json, write_json
 from src.common.logging_utils import configure_logging
 from src.common.postgres import get_db_connection, initialize_database
+from src.common.email_utils import send_email_report
 
+CONFIG = load_config(PROJECT_ROOT / 'config.yaml')
 LOGGER = configure_logging('airflow_control_plane')
-CONFIG = load_config(str(CONFIG_PATH))
-TRAINING_PYTHON = os.environ.get('TRAINING_PYTHON', get_config_value(CONFIG, 'runtime.training_python', '/opt/venvs/training/bin/python'))
-TRAINING_VENV = Path(TRAINING_PYTHON).resolve().parent.parent
-TRAINING_BIN = str(Path(TRAINING_PYTHON).resolve().parent)
-CONTROL_STATE_PATH = PROJECT_ROOT / get_config_value(CONFIG, 'paths.control_plane_state_path', 'artifacts/control_plane_state.json')
-REPORT_MD_PATH = PROJECT_ROOT / get_config_value(CONFIG, 'paths.latest_report_md_path', 'artifacts/reports/latest_report.md')
-REPORT_HTML_PATH = PROJECT_ROOT / get_config_value(CONFIG, 'paths.latest_report_html_path', 'artifacts/reports/latest_report.html')
-TEST_METRICS_PATH = PROJECT_ROOT / get_config_value(CONFIG, 'paths.test_metrics_path', 'artifacts/test_metrics.json')
-LIVE_METRICS_PATH = PROJECT_ROOT / get_config_value(CONFIG, 'paths.live_metrics_path', 'artifacts/live_metrics.json')
-RAW_DATASET_DIR = PROJECT_ROOT / get_config_value(CONFIG, 'paths.raw_dataset_dir', 'data/raw/galaxy_dataset')
-MODELS_DIR = PROJECT_ROOT / get_config_value(CONFIG, 'paths.models_dir', 'models/latest')
+TRAINING_VENV = Path('/opt/venvs/training')
+TRAINING_BIN = str(TRAINING_VENV / 'bin')
+TRAINING_PYTHON = str(TRAINING_VENV / 'bin' / 'python')
+CONTROL_STATE_PATH = resolve_path(CONFIG, 'paths.control_plane_state_path')
+RAW_DATASET_DIR = resolve_path(CONFIG, 'paths.raw_dataset_dir')
+MODELS_DIR = resolve_path(CONFIG, 'paths.models_dir')
+TEST_METRICS_PATH = resolve_path(CONFIG, 'paths.test_metrics_path')
+LIVE_METRICS_PATH = resolve_path(CONFIG, 'paths.live_metrics_path')
+FEEDBACK_TRAINING_DIR = resolve_path(CONFIG, 'paths.feedback_training_dir')
+FEEDBACK_TRAINING_MANIFEST_PATH = resolve_path(CONFIG, 'paths.feedback_training_manifest_path')
+FEEDBACK_TRAINING_SUMMARY_PATH = resolve_path(CONFIG, 'paths.feedback_training_summary_path')
+REPORT_MD_PATH = resolve_path(CONFIG, 'paths.latest_report_md_path')
+REPORT_HTML_PATH = resolve_path(CONFIG, 'paths.latest_report_html_path')
+CONFIG_PATH = PROJECT_ROOT / 'config.yaml'
+DEFAULT_ARGS = {'owner': 'airflow', 'retries': 1, 'retry_delay': timedelta(minutes=5)}
 
-DEFAULT_ARGS = {'owner': 'mlops', 'retries': 1}
+
+def _utc_now_iso() -> str:
+    return datetime.now(UTC).isoformat().replace('+00:00', 'Z')
 
 
 def _build_env(use_training_venv: bool = False) -> dict[str, str]:
+    import os
+
     env = os.environ.copy()
     env['APP_CONFIG_PATH'] = str(CONFIG_PATH)
     env['PROJECT_ROOT'] = str(PROJECT_ROOT)
@@ -64,7 +71,10 @@ def _run_command(command: list[str], use_training_venv: bool = False) -> None:
     if result.stdout:
         LOGGER.info('STDOUT\n%s', result.stdout)
     if result.stderr:
-        LOGGER.warning('STDERR\n%s', result.stderr)
+        if result.returncode == 0:
+            LOGGER.info('STDERR (non-fatal)\n%s', result.stderr)
+        else:
+            LOGGER.warning('STDERR\n%s', result.stderr)
     if result.returncode != 0:
         raise RuntimeError(
             f"Command failed with exit code {result.returncode}: {' '.join(command)}\n"
@@ -77,19 +87,81 @@ def _feedback_count() -> int:
         initialize_database()
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute('SELECT COUNT(*) FROM feedback_corrections')
-                return int(cur.fetchone()[0])
+                cur.execute('SELECT COUNT(*) AS feedback_count FROM feedback_corrections')
+                row = cur.fetchone()
+                return int(row['feedback_count'] if isinstance(row, dict) else row[0])
     except Exception as exc:  # noqa: BLE001
         LOGGER.warning('Unable to read feedback count from Postgres: %s', exc)
         return 0
 
 
+def _feedback_snapshot_count(state: dict | None = None) -> int:
+    current_state = state if state is not None else (read_json(CONTROL_STATE_PATH, {}) or {})
+    return int(current_state.get('last_feedback_snapshot_count', 0))
+
+
+def sync_feedback_training_snapshot() -> dict:
+    from src.data.materialize_feedback_training import (
+        initialize_feedback_training_snapshot,
+        materialize_feedback_training_dataset,
+    )
+
+    state = read_json(CONTROL_STATE_PATH, {}) or {}
+    feedback_count = _feedback_count()
+    last_snapshot_count = _feedback_snapshot_count(state)
+    min_new_feedback = int(get_config_value(CONFIG, 'continuous_improvement.min_new_feedback_samples', 5))
+    new_feedback = max(feedback_count - last_snapshot_count, 0)
+
+    if not (
+        FEEDBACK_TRAINING_DIR.exists()
+        and FEEDBACK_TRAINING_MANIFEST_PATH.exists()
+        and FEEDBACK_TRAINING_SUMMARY_PATH.exists()
+    ):
+        initialize_feedback_training_snapshot(
+            output_root=FEEDBACK_TRAINING_DIR,
+            manifest_path=FEEDBACK_TRAINING_MANIFEST_PATH,
+            summary_path=FEEDBACK_TRAINING_SUMMARY_PATH,
+        )
+
+    if new_feedback < min_new_feedback:
+        result = {
+            'updated': False,
+            'feedback_count': feedback_count,
+            'last_feedback_snapshot_count': last_snapshot_count,
+            'new_feedback_count': new_feedback,
+            'threshold': min_new_feedback,
+        }
+        LOGGER.info('Feedback training snapshot unchanged: %s', result)
+        return result
+
+    summary = materialize_feedback_training_dataset(
+        output_root=FEEDBACK_TRAINING_DIR,
+        manifest_path=FEEDBACK_TRAINING_MANIFEST_PATH,
+        summary_path=FEEDBACK_TRAINING_SUMMARY_PATH,
+    )
+    refreshed_state = read_json(CONTROL_STATE_PATH, {}) or {}
+    refreshed_state['last_feedback_snapshot_count'] = feedback_count
+    refreshed_state['last_feedback_snapshot_at'] = _utc_now_iso()
+    write_json(CONTROL_STATE_PATH, refreshed_state)
+    result = {
+        'updated': True,
+        'feedback_count': feedback_count,
+        'last_feedback_snapshot_count': feedback_count,
+        'new_feedback_count': new_feedback,
+        'threshold': min_new_feedback,
+        **summary,
+    }
+    LOGGER.info('Feedback training snapshot refreshed: %s', result)
+    return result
+
+
 def inspect_runtime_state() -> dict:
     state = read_json(CONTROL_STATE_PATH, {}) or {}
+    state.pop('last_feedback_count', None)
     test_metrics = read_json(TEST_METRICS_PATH, {}) or {}
     live_metrics = read_json(LIVE_METRICS_PATH, {}) or {}
     feedback_count = _feedback_count()
-    previous_feedback_count = int(state.get('last_feedback_count', 0))
+    previous_feedback_count = _feedback_snapshot_count(state)
     new_feedback = max(feedback_count - previous_feedback_count, 0)
     raw_exists = RAW_DATASET_DIR.exists() and any(RAW_DATASET_DIR.rglob('*.jpg'))
     model_exists = MODELS_DIR.exists() and (MODELS_DIR / 'class_names.json').exists()
@@ -115,12 +187,13 @@ def inspect_runtime_state() -> dict:
         model_degraded = True
 
     runtime_state = {
-        'checked_at': datetime.utcnow().isoformat() + 'Z',
+        'checked_at': _utc_now_iso(),
         'raw_exists': raw_exists,
         'model_exists': model_exists,
         'feedback_count': feedback_count,
         'previous_feedback_count': previous_feedback_count,
         'new_feedback_count': new_feedback,
+        'last_feedback_snapshot_count': previous_feedback_count,
         'offline_accuracy': offline_accuracy,
         'offline_macro_f1': offline_macro_f1,
         'live_accuracy': live_accuracy,
@@ -139,7 +212,16 @@ def branch_runtime_decision() -> str:
 
 
 def run_dvc_pipeline() -> None:
+    sync_feedback_training_snapshot()
     _run_command([TRAINING_PYTHON, '-m', 'dvc', 'repro', 'report'], use_training_venv=True)
+
+
+def register_best_model() -> None:
+    _run_command([TRAINING_PYTHON, '-m', 'src.registry.register_best_model'], use_training_venv=True)
+
+
+def refresh_report_after_registry() -> None:
+    _run_command([TRAINING_PYTHON, '-m', 'src.reporting.generate_report'], use_training_venv=True)
 
 
 def reload_model_service() -> None:
@@ -154,8 +236,8 @@ def send_latest_report() -> None:
     subject = f"{get_config_value(CONFIG, 'email.subject_prefix', '[Galaxy MLOps]')} Latest pipeline report"
     send_email_report(CONFIG, subject=subject, body_text=report_text, body_html=report_html, attachments=[REPORT_MD_PATH, REPORT_HTML_PATH])
     state = read_json(CONTROL_STATE_PATH, {}) or {}
-    state['last_feedback_count'] = _feedback_count()
-    state['last_report_sent_at'] = datetime.utcnow().isoformat() + 'Z'
+    state.pop('last_feedback_count', None)
+    state['last_report_sent_at'] = _utc_now_iso()
     write_json(CONTROL_STATE_PATH, state)
 
 
@@ -170,10 +252,12 @@ with DAG(
 ) as dag:
     decide = BranchPythonOperator(task_id='inspect_and_branch', python_callable=branch_runtime_decision)
     run_pipeline = PythonOperator(task_id='run_dvc_pipeline', python_callable=run_dvc_pipeline)
+    register_model = PythonOperator(task_id='register_best_model', python_callable=register_best_model)
+    refresh_report = PythonOperator(task_id='refresh_report_after_registry', python_callable=refresh_report_after_registry)
     skip_retraining = EmptyOperator(task_id='skip_retraining')
     reload_service = PythonOperator(task_id='reload_model_service', python_callable=reload_model_service)
     send_email = PythonOperator(task_id='send_report_email', python_callable=send_latest_report, trigger_rule=TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS)
     finish = EmptyOperator(task_id='finish', trigger_rule=TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS)
 
-    decide >> run_pipeline >> reload_service >> send_email >> finish
+    decide >> run_pipeline >> register_model >> refresh_report >> reload_service >> send_email >> finish
     decide >> skip_retraining >> send_email >> finish

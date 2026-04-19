@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI, Response
 from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Gauge, generate_latest
+from psycopg.rows import dict_row
 
 from src.common.config import load_config, resolve_path
 from src.common.io_utils import read_json
@@ -65,11 +66,11 @@ def metrics():
     try:
         initialize_database()
         with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute('SELECT COUNT(*) FROM predictions')
-                g_prediction_db_count.set(float(cur.fetchone()[0]))
-                cur.execute('SELECT COUNT(*) FROM feedback_corrections')
-                g_correction_db_count.set(float(cur.fetchone()[0]))
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute('SELECT COUNT(*) AS prediction_count FROM predictions')
+                g_prediction_db_count.set(float(cur.fetchone()['prediction_count']))
+                cur.execute('SELECT COUNT(*) AS correction_count FROM feedback_corrections')
+                g_correction_db_count.set(float(cur.fetchone()['correction_count']))
     except Exception as exc:  # noqa: BLE001
         LOGGER.warning('Unable to collect Postgres-backed exporter metrics: %s', exc)
 

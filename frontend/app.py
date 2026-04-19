@@ -25,6 +25,16 @@ def show_csv_errors(errors: list[dict]):
     st.dataframe(pd.DataFrame(errors), use_container_width=True, hide_index=True)
 
 
+def response_error_message(response: requests.Response) -> str:
+    try:
+        payload = response.json()
+    except ValueError:
+        return response.text or f'HTTP {response.status_code}'
+    if isinstance(payload, dict):
+        return str(payload.get('detail') or payload)
+    return str(payload)
+
+
 st.title('🌌 Galaxy Morphology Classification Portal')
 st.caption('Run single-image or ZIP batch inference, download filtered prediction history, and upload correction CSV files backed by Postgres state.')
 
@@ -145,29 +155,37 @@ with recent_tab:
         'end_date': end_date.isoformat(),
         'limit': int(limit),
     }
+    recent: list[dict] = []
+    summary: dict = {}
     try:
         response = requests.get(f'{API_URL}/recent-predictions', params=params, timeout=30)
-        payload = response.json()
-        recent = payload.get('items', [])
-        if recent:
-            st.dataframe(pd.DataFrame(recent), use_container_width=True)
+        if response.ok:
+            payload = response.json()
+            recent = payload.get('items', [])
+            summary = payload.get('summary', {})
+            if recent:
+                st.dataframe(pd.DataFrame(recent), use_container_width=True)
+            else:
+                st.info('No predictions recorded for the selected date range.')
+            st.caption(
+                f"Prediction count: {summary.get('prediction_count', 0)} | Correction count: {summary.get('feedback_count', 0)}"
+            )
         else:
-            st.info('No predictions recorded for the selected date range.')
-        summary = payload.get('summary', {})
-        st.caption(
-            f"Prediction count: {summary.get('prediction_count', 0)} | Correction count: {summary.get('feedback_count', 0)}"
-        )
+            st.warning(f'Unable to fetch recent predictions: {response_error_message(response)}')
     except Exception as exc:  # noqa: BLE001
         st.warning(f'Unable to fetch recent predictions: {exc}')
 
-    export_response = requests.get(f'{API_URL}/recent-predictions/export', params=params, timeout=60)
-    if export_response.ok:
-        st.download_button(
-            label='Download filtered prediction CSV template',
-            data=export_response.content,
-            file_name=f'predictions_{start_date.isoformat()}_{end_date.isoformat()}.csv',
-            mime='text/csv',
-        )
+    if recent:
+        export_response = requests.get(f'{API_URL}/recent-predictions/export', params=params, timeout=60)
+        if export_response.ok:
+            st.download_button(
+                label='Download filtered prediction CSV template',
+                data=export_response.content,
+                file_name=f'predictions_{start_date.isoformat()}_{end_date.isoformat()}.csv',
+                mime='text/csv',
+            )
+        else:
+            st.warning(f'Unable to export recent predictions: {response_error_message(export_response)}')
 
 st.divider()
 st.subheader('Latest pipeline report')

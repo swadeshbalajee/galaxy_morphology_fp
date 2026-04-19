@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 import time
@@ -13,11 +14,12 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from PIL import Image
 from sklearn.metrics import classification_report, confusion_matrix, precision_recall_fscore_support
-from torch.utils.data import DataLoader
+from torch.utils.data import ConcatDataset, DataLoader, Dataset
 from torchvision import datasets, transforms
 
-from src.common.config import get_config_value, load_config, resolve_path
+from src.common.config import get_config_value, load_config, project_root, resolve_path
 from src.common.io_utils import write_json
 from src.common.logging_utils import configure_logging
 from src.training.model_def import build_model
@@ -36,14 +38,65 @@ def make_transforms(config: dict):
     ])
 
 
+class FeedbackManifestDataset(Dataset):
+    def __init__(self, samples: list[tuple[Path, int]], transform):
+        self.samples = samples
+        self.transform = transform
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, index: int):
+        image_path, target = self.samples[index]
+        with Image.open(image_path) as image:
+            image = image.convert("RGB")
+            if self.transform is not None:
+                image = self.transform(image)
+        return image, target
+
+
+def load_feedback_samples(config: dict, class_to_idx: dict[str, int]) -> list[tuple[Path, int]]:
+    manifest_path = resolve_path(config, "paths.feedback_training_manifest_path")
+    if not manifest_path.exists():
+        return []
+
+    samples: list[tuple[Path, int]] = []
+    root = project_root(config)
+    with manifest_path.open("r", newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            label = str(row.get("corrected_label", "")).strip()
+            image_path = str(row.get("image_path", "")).strip()
+            if not label or not image_path:
+                continue
+            if label not in class_to_idx:
+                LOGGER.warning("Skipping feedback sample with unknown label=%s path=%s", label, image_path)
+                continue
+            resolved_path = root / Path(image_path)
+            if not resolved_path.exists():
+                LOGGER.warning("Skipping feedback sample with missing image=%s", resolved_path)
+                continue
+            samples.append((resolved_path, class_to_idx[label]))
+    return samples
+
+
 def make_dataloaders(train_dir: str, val_dir: str, test_dir: str, config: dict):
     transform = make_transforms(config)
     batch_size = int(get_config_value(config, "training.batch_size", 32))
     num_workers = int(get_config_value(config, "training.num_workers", 0))
-    train_data = datasets.ImageFolder(train_dir, transform=transform)
+    base_train_data = datasets.ImageFolder(train_dir, transform=transform)
     val_data = datasets.ImageFolder(val_dir, transform=transform)
     test_data = datasets.ImageFolder(test_dir, transform=transform)
+    feedback_samples = load_feedback_samples(config, base_train_data.class_to_idx)
+    train_data = (
+        ConcatDataset([base_train_data, FeedbackManifestDataset(feedback_samples, transform)])
+        if feedback_samples
+        else base_train_data
+    )
+    if feedback_samples:
+        LOGGER.info("Loaded %s materialized feedback samples into the training dataset", len(feedback_samples))
     return (
+        base_train_data.classes,
+        len(feedback_samples),
         train_data,
         val_data,
         test_data,
@@ -99,8 +152,7 @@ def train(train_dir: str, val_dir: str, test_dir: str, export_dir: str):
     mlflow.set_experiment(get_config_value(config, 'project.name', 'galaxy-mlops'))
     mlflow.autolog(log_models=False)
 
-    train_data, val_data, test_data, train_loader, val_loader, test_loader = make_dataloaders(train_dir, val_dir, test_dir, config)
-    class_names = train_data.classes
+    class_names, feedback_train_samples, train_data, val_data, test_data, train_loader, val_loader, test_loader = make_dataloaders(train_dir, val_dir, test_dir, config)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = build_model(len(class_names), get_config_value(config, 'training.pretrained_backbone', 'resnet18'))
     model.to(device)
@@ -122,6 +174,7 @@ def train(train_dir: str, val_dir: str, test_dir: str, export_dir: str):
             'backbone': training_params['pretrained_backbone'],
             'num_classes': len(class_names),
             'train_samples': len(train_data),
+            'feedback_train_samples': feedback_train_samples,
             'val_samples': len(val_data),
             'test_samples': len(test_data),
         })
@@ -199,6 +252,7 @@ def train(train_dir: str, val_dir: str, test_dir: str, export_dir: str):
             'epochs_completed': len(epoch_history),
             'total_duration_seconds': round(total_duration, 3),
             'samples_per_second': round(len(train_loader.dataset) * max(len(epoch_history), 1) / max(total_duration, 1e-6), 3),
+            'feedback_train_samples': feedback_train_samples,
             'history': epoch_history,
             'class_names': class_names,
         }
@@ -217,6 +271,7 @@ def train(train_dir: str, val_dir: str, test_dir: str, export_dir: str):
             'train_duration_seconds': round(total_duration, 3),
             'epochs_completed': len(epoch_history),
             'train_samples': len(train_data),
+            'feedback_train_samples': feedback_train_samples,
             'val_samples': len(val_data),
             'test_samples': len(test_data),
         })

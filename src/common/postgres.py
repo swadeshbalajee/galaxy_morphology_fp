@@ -17,6 +17,7 @@ if not LOGGER.handlers:
     handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s"))
     LOGGER.addHandler(handler)
 LOGGER.setLevel(logging.INFO)
+LOGGER.propagate = False
 
 
 def get_database_url(config: dict | None = None) -> str:
