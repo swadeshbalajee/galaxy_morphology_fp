@@ -12,3 +12,16 @@ datasources:
     type: loki
     access: proxy
     url: http://loki:3100
+  - name: Postgres
+    uid: postgres
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    database: galaxy_app
+    user: galaxy
+    secureJsonData:
+      password: galaxy
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1600
+      timescaledb: false

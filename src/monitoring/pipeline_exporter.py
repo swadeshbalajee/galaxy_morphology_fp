@@ -5,7 +5,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Gauge, gen
 from psycopg.rows import dict_row
 
 from src.common.artifact_store import load_pipeline_artifact
-from src.common.config import load_config, resolve_path
+from src.common.config import load_config
 from src.common.logging_utils import configure_logging
 from src.common.postgres import get_db_connection, initialize_database
 
@@ -30,7 +30,12 @@ def metrics():
     g_feedback_count = Gauge('galaxy_live_feedback_count', 'Total live feedback rows.', registry=registry)
     g_train_duration = Gauge('galaxy_pipeline_train_duration_seconds', 'Latest train duration.', registry=registry)
     g_raw_count = Gauge('galaxy_raw_images_total', 'Raw materialized images by class.', ['label'], registry=registry)
-    g_log_size = Gauge('galaxy_log_file_bytes', 'Tracked log file size.', ['log_file'], registry=registry)
+    g_service_logs = Gauge(
+        'galaxy_service_logs_total',
+        'Application log records stored in Postgres.',
+        ['service', 'component', 'level'],
+        registry=registry,
+    )
     g_prediction_db_count = Gauge('galaxy_db_prediction_count', 'Total predictions stored in Postgres.', registry=registry)
     g_correction_db_count = Gauge('galaxy_db_correction_count', 'Total corrections stored in Postgres.', registry=registry)
 
@@ -54,15 +59,6 @@ def metrics():
     for label, count in (raw_summary.get('actual_counts') or {}).items():
         g_raw_count.labels(label=label).set(float(count))
 
-    logs_dir = resolve_path(config, 'paths.logs_dir')
-    for path in logs_dir.glob('*.log'):
-        g_log_size.labels(log_file=path.name).set(float(path.stat().st_size))
-
-    airflow_logs_dir = resolve_path(config, 'paths.artifacts_dir').parent / 'airflow' / 'logs'
-    if airflow_logs_dir.exists():
-        total_size = sum(p.stat().st_size for p in airflow_logs_dir.rglob('*') if p.is_file())
-        g_log_size.labels(log_file='airflow_total').set(float(total_size))
-
     try:
         initialize_database()
         with get_db_connection() as conn:
@@ -71,6 +67,19 @@ def metrics():
                 g_prediction_db_count.set(float(cur.fetchone()['prediction_count']))
                 cur.execute('SELECT COUNT(*) AS correction_count FROM feedback_corrections')
                 g_correction_db_count.set(float(cur.fetchone()['correction_count']))
+                cur.execute(
+                    """
+                    SELECT service, component, level, COUNT(*) AS log_count
+                    FROM service_logs
+                    GROUP BY service, component, level
+                    """
+                )
+                for row in cur.fetchall():
+                    g_service_logs.labels(
+                        service=row['service'],
+                        component=row['component'],
+                        level=row['level'],
+                    ).set(float(row['log_count']))
     except Exception as exc:  # noqa: BLE001
         LOGGER.warning('Unable to collect Postgres-backed exporter metrics: %s', exc)
 

@@ -85,8 +85,8 @@ Reads the generated report and sends it through SMTP when enabled.
 - live accuracy
 - raw images by class
 - training duration
-- tracked log sizes
+- Postgres-backed application log counts
 
-### Loki logs
-- `logs/*.log`
-- `airflow/logs/**/*.log`
+### Logs
+- application/service logs are stored in Postgres table `service_logs`
+- Airflow task logs remain under `airflow/logs/**/*.log` and are scraped by Loki

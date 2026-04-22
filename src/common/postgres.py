@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-import logging
 import os
-import sys
 from contextlib import contextmanager
 from typing import Any, Iterator, Mapping
 
@@ -12,14 +10,9 @@ from psycopg import sql
 from psycopg.rows import dict_row
 
 from src.common.config import get_config_value, load_config
+from src.common.logging_utils import configure_logging
 
-LOGGER = logging.getLogger("postgres")
-if not LOGGER.handlers:
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s"))
-    LOGGER.addHandler(handler)
-LOGGER.setLevel(logging.INFO)
-LOGGER.propagate = False
+LOGGER = configure_logging("postgres")
 
 
 def get_database_url(config: dict | None = None) -> str:
@@ -130,6 +123,28 @@ CREATE INDEX IF NOT EXISTS idx_pipeline_artifacts_stage_recorded_at
 CREATE INDEX IF NOT EXISTS idx_pipeline_artifacts_recorded_date
     ON pipeline_artifact_snapshots (recorded_date DESC);
 
+CREATE TABLE IF NOT EXISTS service_logs (
+    log_id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL,
+    service TEXT NOT NULL,
+    component TEXT NOT NULL,
+    level TEXT NOT NULL,
+    message TEXT NOT NULL,
+    exception TEXT,
+    pathname TEXT,
+    lineno INTEGER,
+    func_name TEXT,
+    process_id INTEGER,
+    thread_id BIGINT
+);
+
+CREATE INDEX IF NOT EXISTS idx_service_logs_created_at
+    ON service_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_service_logs_service_created_at
+    ON service_logs (service, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_service_logs_level_created_at
+    ON service_logs (level, created_at DESC);
+
 CREATE OR REPLACE VIEW latest_pipeline_artifact_snapshots AS
 SELECT DISTINCT ON (artifact_key)
     artifact_key,
@@ -155,6 +170,7 @@ def initialize_database() -> None:
             cur.execute('ANALYZE feedback_corrections;')
             cur.execute('ANALYZE control_plane_state;')
             cur.execute('ANALYZE pipeline_artifact_snapshots;')
+            cur.execute('ANALYZE service_logs;')
         ensure_pipeline_artifact_partition(conn, date.today())
         ensure_pipeline_artifact_partition(conn, date.today() + timedelta(days=31))
     LOGGER.info('Postgres schema initialized successfully.')

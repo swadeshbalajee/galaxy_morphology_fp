@@ -22,6 +22,7 @@ x-airflow-common: &airflow-common
     PROJECT_ROOT: /opt/airflow/project
     PYTHONPATH: /opt/airflow/project
     TRAINING_PYTHON: /opt/venvs/training/bin/python
+    LOG_SERVICE_NAME: airflow
     DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy_app
     MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
     MLFLOW_TRACKING_URI: http://mlflow:5000
@@ -160,6 +161,7 @@ services:
     env_file: [.env]
     environment:
       APP_CONFIG_PATH: /app/config.yaml
+      LOG_SERVICE_NAME: trainer
       DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy_app
       MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
       MLFLOW_TRACKING_URI: http://mlflow:5000
@@ -180,6 +182,7 @@ services:
     env_file: [.env]
     environment:
       APP_CONFIG_PATH: /app/config.yaml
+      LOG_SERVICE_NAME: pipeline-exporter
       DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy_app
     working_dir: /app
     volumes:
@@ -195,6 +198,8 @@ services:
     env_file: [.env]
     environment:
       APP_CONFIG_PATH: /app/config.yaml
+      LOG_SERVICE_NAME: model-service
+      DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy_app
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MODEL_URI: models:/galaxy_morphology_classifier@champion
     working_dir: /app
@@ -218,6 +223,7 @@ services:
     env_file: [.env]
     environment:
       APP_CONFIG_PATH: /app/config.yaml
+      LOG_SERVICE_NAME: api
       DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy_app
     working_dir: /app
     volumes:
@@ -242,6 +248,8 @@ services:
     env_file: [.env]
     environment:
       APP_CONFIG_PATH: /app/config.yaml
+      LOG_SERVICE_NAME: frontend
+      DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy_app
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MODEL_URI: models:/galaxy_morphology_classifier@champion
     working_dir: /app

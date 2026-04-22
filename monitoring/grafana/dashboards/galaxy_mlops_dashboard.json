@@ -291,7 +291,7 @@
         "uid": "prometheus"
       },
       "type": "timeseries",
-      "title": "Tracked Log File Size",
+      "title": "Postgres Log Records",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -300,11 +300,139 @@
       },
       "targets": [
         {
-          "expr": "galaxy_log_file_bytes",
-          "legendFormat": "{{log_file}}",
+          "expr": "sum(galaxy_service_logs_total) by (service, component)",
+          "legendFormat": "{{service}} / {{component}}",
           "refId": "A"
         }
       ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "type": "logs",
+      "title": "API Logs",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 30
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT created_at AS \"time\", concat(service, ' | ', level, ' | ', component, ' | ', message, COALESCE(E'\\n' || NULLIF(exception, ''), '')) AS \"line\", service, component, level FROM service_logs WHERE $__timeFilter(created_at) AND service = 'api' ORDER BY created_at DESC LIMIT 500",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "type": "logs",
+      "title": "Frontend Logs",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 30
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT created_at AS \"time\", concat(service, ' | ', level, ' | ', component, ' | ', message, COALESCE(E'\\n' || NULLIF(exception, ''), '')) AS \"line\", service, component, level FROM service_logs WHERE $__timeFilter(created_at) AND service = 'frontend' ORDER BY created_at DESC LIMIT 500",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "type": "logs",
+      "title": "Model Service Logs",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 39
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT created_at AS \"time\", concat(service, ' | ', level, ' | ', component, ' | ', message, COALESCE(E'\\n' || NULLIF(exception, ''), '')) AS \"line\", service, component, level FROM service_logs WHERE $__timeFilter(created_at) AND service = 'model-service' ORDER BY created_at DESC LIMIT 500",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "type": "logs",
+      "title": "Pipeline Exporter Logs",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 39
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT created_at AS \"time\", concat(service, ' | ', level, ' | ', component, ' | ', message, COALESCE(E'\\n' || NULLIF(exception, ''), '')) AS \"line\", service, component, level FROM service_logs WHERE $__timeFilter(created_at) AND service = 'pipeline-exporter' ORDER BY created_at DESC LIMIT 500",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
     },
     {
       "datasource": {
@@ -312,19 +440,29 @@
         "uid": "loki"
       },
       "type": "logs",
-      "title": "Application Logs",
+      "title": "Airflow Task Logs",
       "gridPos": {
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 30
+        "y": 48
       },
       "targets": [
         {
-          "expr": "{job=~\"project-logs|airflow-logs\"}",
+          "expr": "{job=\"airflow-task-logs\"}",
           "refId": "A"
         }
-      ]
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
     }
   ],
   "schemaVersion": 39,
