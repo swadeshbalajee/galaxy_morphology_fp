@@ -14,8 +14,9 @@ import numpy as np
 import pandas as pd
 import requests
 
+from src.common.artifact_store import store_pipeline_artifact
 from src.common.config import get_config_value, load_config, resolve_path
-from src.common.io_utils import ensure_dir, reset_dir, write_json
+from src.common.io_utils import ensure_dir, reset_dir
 from src.common.logging_utils import configure_logging
 
 LOGGER = configure_logging("download_data")
@@ -393,8 +394,7 @@ def build_dataset(output_root: Path, cache_dir: Path) -> dict:
         "resolved_columns": asdict(cols),
         "seed": seed,
     }
-    write_json(resolve_path(config, "paths.raw_summary_path"), summary)
-    write_json(cache_dir / "download_summary_project5.json", summary)
+    store_pipeline_artifact("raw_summary", summary, config=config)
     LOGGER.info("Raw dataset build complete: %s", summary)
     return summary
 

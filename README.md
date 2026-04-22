@@ -1,200 +1,202 @@
-# Galaxy Morphology MLOps Project
+# Galaxy Morphology MLOps Project Report
 
-This version upgrades the stack in five important ways:
+## Cover
 
-1. **Postgres replaces SQLite** for application state and MLflow backend metadata.
-2. **ZIP batch inference** is supported from the UI and API.
-3. **Correction CSV upload with validation** is supported with row-level error reporting.
-4. **Grafana dashboards + Loki logs + Prometheus alerting** are wired more completely.
-5. **Adminer** is added as a lightweight SQL UI for querying Postgres from the browser.
+- Project: `galaxy-mlops-v2`
+- Repository: `galaxy_morphology_fp`
+- Stack: DVC + Airflow + FastAPI + Streamlit + MLflow + Postgres + Prometheus + Grafana + Loki
+- Report owner: `<Add name>`
+- Submission date: `<Add date>`
 
-## What changed
+## Abstract
 
-### Serving and feedback workflow
+This project implements an end-to-end galaxy morphology classification platform with a full MLOps stack. The system supports dataset preparation, model training, evaluation, registry promotion, batch and single-image inference, feedback capture, retraining decisions, observability, alerting, and operational reporting. The final architecture separates the ML artifact pipeline from the operational control plane: DVC manages reproducible ML stages, while Airflow orchestrates runtime decisions such as retraining, report generation, service reloads, and email delivery.
 
-- Single-image prediction still works.
-- Batch prediction now accepts a `.zip` containing multiple images.
-- Every prediction row is stored in **Postgres**.
-- Image bytes are also stored in **Postgres** so prediction state stays durable.
-- Recent predictions can be filtered by date range in the UI.
-- Filtered predictions can be downloaded as a CSV template for corrections.
-- Correction CSV upload validates the file before inserting rows into Postgres.
-- Accepted feedback can be materialized into a **DVC-tracked training snapshot** once the configured feedback threshold is reached.
+## Problem Statement
 
-### Database changes
+The goal is to classify galaxy images into:
 
-The application no longer uses `artifacts/predictions.db`.
+- `elliptical`
+- `spiral`
+- `lenticular`
+- `irregular`
+- `merger`
 
-State now lives in Postgres tables:
+The system is expected to:
+
+- train and evaluate a reproducible image classifier
+- expose prediction APIs and a usable frontend
+- capture user corrections for continuous improvement
+- store operational and application state in Postgres
+- monitor model and service behavior with observability tooling
+- support demonstrable deployment with proof artifacts
+
+## Objectives Delivered
+
+- Reproducible data and model pipeline with DVC
+- Airflow-based control plane for retraining and reporting
+- Postgres-backed application state and pipeline artifact summaries
+- MLflow experiment tracking and model registry promotion
+- Streamlit frontend for prediction, batch upload, and feedback
+- FastAPI API and model-service deployment
+- Prometheus, Grafana, Loki, and Alertmanager integration
+- SMTP-based email delivery for alerts and Airflow report email
+
+## Final System Architecture
+
+### High-Level Flow
+
+`Frontend -> API -> Model Service -> Postgres`
+
+`DVC -> Airflow Control Plane -> Train / Evaluate / Report -> MLflow + Monitoring Stack`
+
+### Major Components
+
+- `frontend/`: Streamlit user interface
+- `api/`: FastAPI gateway for inference, history, and feedback
+- `model_service/`: model-serving service
+- `src/data/`: ingestion and preprocessing stages
+- `src/training/`: training and evaluation logic
+- `src/reporting/`: report generation
+- `src/registry/`: MLflow model registration and champion promotion
+- `airflow/dags/`: control-plane DAGs
+- `monitoring/`: Prometheus, Grafana, Loki, Promtail, Alertmanager config
+- `postgres/`: database initialization scripts
+
+## Database Design Summary
+
+### Operational Databases
+
+- `airflow`
+- `galaxy_app`
+- `mlflow`
+
+### Application Tables
 
 - `prediction_batches`
 - `predictions`
 - `feedback_uploads`
 - `feedback_corrections`
+- `control_plane_state`
+- `pipeline_artifact_snapshots`
 
-The operational behavior is:
+### Artifact Storage Design
 
-- indexes are created on `created_at`
-- the corrections and upload tables are **clustered by date index** after insert-heavy operations
-- Airflow and evaluation now read feedback counts and live metrics from Postgres-backed correction data
-- MLflow backend metadata is stored in Postgres instead of SQLite
+Most pipeline summaries and metric snapshots now live in Postgres instead of local JSON files. The main table is:
 
-### Monitoring changes
+- `pipeline_artifact_snapshots`
 
-- Grafana datasources are provisioned with fixed UIDs.
-- The dashboard JSON is fixed and expanded.
-- The Loki logs panel is fixed.
-- Alertmanager is added and connected to Prometheus.
-- Mailtrap SMTP fields are exposed in `.env`.
+Design characteristics:
 
----
+- stores summary and metric payloads as `JSONB`
+- partitioned by `recorded_date`
+- queryable directly with SQL
+- latest snapshot accessible through the view:
+  - `latest_pipeline_artifact_snapshots`
 
-## Architecture
+Artifacts moved into Postgres include:
 
-### Main flow
+- raw ingestion summary
+- preprocess v1 summary
+- preprocess final summary
+- feedback training summary
+- train metrics
+- validation metrics
+- test metrics
+- live metrics
+- classification report
+- pipeline runtime summary
+- registry status
 
-`Frontend -> API Gateway -> Model Service -> Postgres`
+Artifacts intentionally kept as files:
 
-### MLOps flow
+- processed datasets
+- trained model export
+- report files
+- confusion matrix CSV
+- feedback manifest CSV
+- drift baseline file
 
-`DVC -> Airflow control plane -> training/evaluation/report -> MLflow + Prometheus + Grafana + Loki`
+## Pipeline Design
 
-### Database usage
+### DVC Stages
 
-- **Airflow DB**: `airflow`
-- **Application DB**: `galaxy_app`
-- **MLflow DB**: `mlflow`
+1. `fetch_raw`
+2. `preprocess_v1`
+3. `preprocess_final`
+4. `train`
+5. `evaluate`
+6. `report`
 
-All three run in the same Postgres container, but as separate logical databases.
+### Airflow Control Plane
 
----
+The Airflow DAG:
 
-## Services
+- checks runtime state
+- inspects feedback growth
+- decides whether retraining is required
+- runs the DVC report pipeline when necessary
+- registers the best model in MLflow
+- reloads the serving model
+- sends the latest report through the configured SMTP connection
 
-After startup these should be available:
+## Deployment Topology
+
+The project is deployed with Docker Compose and includes:
+
+- `postgres`
+- `redis`
+- `airflow-init`
+- `airflow-api-server`
+- `airflow-scheduler`
+- `airflow-dag-processor`
+- `airflow-worker`
+- `airflow-triggerer`
+- `trainer`
+- `pipeline-exporter`
+- `model-service`
+- `api`
+- `frontend`
+- `mlflow`
+- `prometheus`
+- `alertmanager`
+- `loki`
+- `promtail`
+- `grafana`
+- `adminer`
+
+## Runtime Endpoints
 
 - Frontend: `http://localhost:8501`
-- API docs: `http://localhost:8000/docs`
-- Model service docs: `http://localhost:8001/docs`
+- API: `http://localhost:8000/docs`
+- Model Service: `http://localhost:8001/docs`
 - Airflow: `http://localhost:8080`
 - MLflow: `http://localhost:5000`
 - Prometheus: `http://localhost:9090`
 - Alertmanager: `http://localhost:9093`
 - Grafana: `http://localhost:3000`
-- Loki readiness: `http://localhost:3100/ready`
-- Adminer SQL UI: `http://localhost:8081`
-- Postgres: `localhost:5432`
+- Adminer: `http://localhost:8081`
 
----
+## SQL Evidence Queries
 
-## First-time setup
-
-## 1. Prepare environment file
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and set at least these values:
-
-```env
-DATABASE_URL=postgresql://galaxy:galaxy@postgres:5432/galaxy_app
-MLFLOW_BACKEND_STORE_URI=postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
-MAILTRAP_SMTP_HOST=sandbox.smtp.mailtrap.io
-MAILTRAP_SMTP_PORT=2525
-MAILTRAP_SMTP_USERNAME=YOUR_MAILTRAP_USERNAME
-MAILTRAP_SMTP_PASSWORD=YOUR_MAILTRAP_PASSWORD
-MAILTRAP_FROM_EMAIL=alerts@example.com
-ALERT_EMAIL_TO=you@example.com
-```
-
-If you also want the report-email step from Airflow to send mail, update the `email:` section in `config.yaml` and set the SMTP credential env vars used there.
-
-## 2. Important note about existing Postgres volumes
-
-The project now uses a Postgres init script to create:
-
-- user/db: `airflow` / `airflow`
-- user/db: `galaxy` / `galaxy_app`
-- user/db: `mlflow` / `mlflow`
-
-These init scripts run only on a **fresh Postgres volume**.
-
-If you already started an older version of the stack, reset the Postgres volume once:
-
-```bash
-docker compose down -v
-```
-
-Then start again.
-
-This is important because otherwise the new databases and roles may not be created.
-
-## 3. Start the full stack
-
-```bash
-docker compose up --build
-```
-
----
-
-## Postgres usage and SQL UI
-
-## Browser-based SQL UI
-
-Open Adminer:
-
-`http://localhost:8081`
-
-Use:
-
-- **System**: `PostgreSQL`
-- **Server**: `postgres`
-- **Username**: `galaxy`
-- **Password**: `galaxy`
-- **Database**: `galaxy_app`
-
-You can also log into:
-
-- `airflow`
-- `mlflow`
-
-by changing the database and username.
-
-## CLI access without the root-user issue
-
-If you want shell access instead of Adminer, use:
-
-```bash
-docker compose exec postgres psql -U postgres -d postgres
-```
-
-or for the application DB:
-
-```bash
-docker compose exec postgres psql -U postgres -d galaxy_app
-```
-
-Do not try to run `psql` from a root shell inside a random container. Use the Postgres service directly, or use Adminer.
-
-## Useful SQL checks
-
-Count predictions:
+### Latest Artifact Snapshots
 
 ```sql
-SELECT COUNT(*) FROM predictions;
+SELECT artifact_key, stage_name, recorded_at
+FROM latest_pipeline_artifact_snapshots
+ORDER BY artifact_key;
 ```
 
-See latest prediction rows:
+### Historical Train Metrics by Date
 
 ```sql
-SELECT prediction_id, original_filename, predicted_label, created_at
-FROM predictions
-ORDER BY created_at DESC
-LIMIT 20;
+SELECT recorded_date, recorded_at, payload
+FROM pipeline_artifact_snapshots
+WHERE artifact_key = 'train_metrics'
+ORDER BY recorded_at DESC;
 ```
 
-See uploaded correction rows:
+### Recent Feedback Corrections
 
 ```sql
 SELECT prediction_id, predicted_label, corrected_label, created_at
@@ -203,406 +205,139 @@ ORDER BY created_at DESC
 LIMIT 20;
 ```
 
----
+## Deployment Procedure
 
-## UI workflow
+### Environment Preparation
 
-## 1. Single image prediction
+1. Configure `.env`
+2. Confirm Mailtrap SMTP values for Alertmanager
+3. Confirm Airflow SMTP connection for report email
 
-In the **Single image** tab:
-
-- upload one image
-- click **Predict Morphology**
-- optionally submit a manual correction
-
-That creates:
-
-- one batch row in `prediction_batches`
-- one prediction row in `predictions`
-- one correction row in `feedback_corrections` if feedback is submitted
-
-## 2. ZIP batch prediction
-
-In the **ZIP batch upload** tab:
-
-- upload a `.zip` containing images
-- click **Run batch prediction**
-
-The API will:
-
-- validate the ZIP
-- scan supported image files inside it
-- call the model service once per image
-- store every image and prediction in Postgres
-- return the batch id and prediction table to the UI
-
-## 3. Filter recent predictions and export CSV
-
-In the **Recent predictions** tab:
-
-- choose `start_date`
-- choose `end_date`
-- choose row limit
-- inspect the filtered prediction table
-- click **Download filtered prediction CSV template**
-
-This downloaded CSV contains these columns:
-
-- `prediction_id`
-- `batch_id`
-- `original_filename`
-- `predicted_label`
-- `model_version`
-- `latency_ms`
-- `created_at`
-- `corrected_label`
-
-Only the rows that need correction should be kept in the file you upload back.
-
-## 4. Upload correction CSV
-
-In the **Correction CSV upload** tab:
-
-- upload the edited CSV
-- click **Validate and upload CSV**
-
-The backend validates every row before storing it.
-
-### Validation rules
-
-For each uploaded row the API checks:
-
-1. required columns are present
-2. required columns are filled
-3. `predicted_label != corrected_label`
-4. `prediction_id` exists in Postgres
-5. the non-correction columns match the stored prediction row
-
-If validation fails, the UI shows a popup with:
-
-- row number
-- exact mistake
-
-No rows are inserted when validation fails.
-
-If validation succeeds:
-
-- the raw CSV is stored in `feedback_uploads`
-- the correction rows are upserted into `feedback_corrections`
-
----
-
-## DVC and Airflow
-
-## Run the DVC pipeline manually
+### Deploy
 
 ```bash
-docker compose exec -w /opt/airflow/project airflow-worker /opt/venvs/training/bin/python -m dvc repro report
+docker compose up -d --build
 ```
 
-## Trigger Airflow control plane
-
-Open Airflow and trigger:
-
-`galaxy_morphology_control_plane`
-
-The Airflow DAG now reads live feedback count from Postgres instead of SQLite.
-
-## Feedback-driven retraining
-
-Accepted feedback is stored in Postgres first.
-
-Before `dvc repro report` runs, the Airflow control plane checks how many new accepted feedback rows have been added since the last feedback snapshot used for training.
-
-The threshold is controlled by:
-
-- `continuous_improvement.min_new_feedback_samples` in `config.yaml`
-
-When the number of new feedback rows is below that threshold:
-
-- the feedback training snapshot is not refreshed
-- `train` does not rerun because of feedback alone
-
-When the threshold is reached or exceeded:
-
-- feedback images are materialized into `data/feedback/training_feedback`
-- a manifest is written to `artifacts/feedback_training_manifest.csv`
-- a summary is written to `artifacts/feedback_training_summary.json`
-- the `train` stage sees changed DVC dependencies and retrains with those feedback samples included
-
-The training code appends those materialized feedback samples to the normal `data/processed/final/train` dataset during model training.
-
-## Git and DVC note
-
-Commit:
-
-- source code changes
-- config changes
-- `dvc.yaml`
-- `dvc.lock`
-
-Do not commit:
-
-- `data/raw/**`
-- `data/processed/**`
-- `data/feedback/training_feedback/**`
-- `artifacts/**`
-- `models/latest/**`
-- runtime `mlruns/**` contents
-
-`dvc.lock` should be committed after a successful repro so the current pipeline state is reproducible for the next clone.
-
----
-
-## MLflow
-
-MLflow is still available at:
-
-`http://localhost:5000`
-
-The difference is that its backend metadata now lives in Postgres instead of `mlflow.db`.
-
-Artifacts still go to the mounted `mlruns` volume.
-
----
-
-## Prometheus, Grafana, Loki, and Alertmanager
-
-## What is wired
-
-### Prometheus scrapes
-
-- API metrics
-- model-service metrics
-- pipeline-exporter metrics
-- Prometheus self-metrics
-
-### Loki/Promtail scrapes
-
-- `logs/*.log`
-- `airflow/logs/**`
-
-### Grafana dashboard now includes
-
-- API requests/sec
-- API latency p95
-- offline test accuracy
-- live feedback accuracy
-- API readiness
-- DB readiness
-- model readiness
-- feedback count
-- predictions stored
-- corrections stored
-- CSV validation failures
-- brightness drift z-score
-- application logs from Loki
-
-## How to verify Grafana
-
-1. Open `http://localhost:3000`
-2. Go to **Dashboards**
-3. Open **Galaxy Morphology MLOps Dashboard**
-4. Set time range to **Last 6 hours** or **Last 24 hours**
-5. Generate traffic from the frontend by:
-   - running a single prediction
-   - running a ZIP batch upload
-   - uploading one invalid correction CSV
-6. Refresh the dashboard
-
-You should now see live changes in:
-
-- predictions stored
-- correction counts
-- validation failures
-- log stream
-
-## How to verify logs in Grafana
-
-1. Open Grafana
-2. Open the dashboard logs panel, or go to **Explore**
-3. Select datasource **Loki**
-4. Run this query:
-
-```text
-{job=~"project-logs|airflow-logs"}
-```
-
-If logs are still empty, check:
+### Validate
 
 ```bash
-docker compose logs promtail
-docker compose logs loki
-docker compose logs grafana
+docker compose ps
 ```
 
-and also confirm log files are being written under:
+## Reported Features
 
-- `logs/`
-- `airflow/logs/`
+### Inference and Feedback
 
----
+- single image prediction
+- ZIP batch prediction
+- recent prediction filtering
+- CSV template export
+- validated correction CSV upload
+- feedback storage in Postgres
 
-## Email alerting with Mailtrap
+### Continuous Improvement
 
-This stack uses:
+- feedback-aware retraining trigger
+- feedback materialization into training dataset
+- live metrics from accepted corrections
+- control-plane state stored in Postgres
 
-- **Prometheus** for alert rules
-- **Alertmanager** for notification routing
-- **Mailtrap SMTP** for sending emails
+### Monitoring and Alerting
 
-## Step-by-step Mailtrap setup
+- Prometheus service and pipeline metrics
+- Grafana dashboards
+- Loki log aggregation
+- Alertmanager email routing
+- Mailtrap SMTP integration
 
-### 1. In Mailtrap
+## Proof of Deployment
 
-Create or open an inbox and copy:
+Store screenshots inside [`image/proof`](<c:\Users\Swadesh B\Downloads\galaxy_morphology_fp\image\proof>).
 
-- SMTP host
-- SMTP port
-- username
-- password
+### Proof 1: Docker Compose Running
 
-### 2. Put those values in `.env`
+Expected file: `image/proof/01-docker-compose-ps.png`
 
-```env
-MAILTRAP_SMTP_HOST=sandbox.smtp.mailtrap.io
-MAILTRAP_SMTP_PORT=2525
-MAILTRAP_SMTP_USERNAME=YOUR_VALUE
-MAILTRAP_SMTP_PASSWORD=YOUR_VALUE
-MAILTRAP_FROM_EMAIL=alerts@example.com
-ALERT_EMAIL_TO=you@example.com
-```
+![Proof Placeholder - Docker Compose](image/proof/01-docker-compose-ps.png)
 
-### 3. Restart alerting services
+### Proof 2: Frontend Home / Prediction UI
 
-```bash
-docker compose up -d --build prometheus alertmanager grafana
-```
+Expected file: `image/proof/02-frontend-ui.png`
 
-### 4. Confirm Alertmanager is healthy
+![Proof Placeholder - Frontend UI](image/proof/02-frontend-ui.png)
 
-Open:
+### Proof 3: Airflow DAG View
 
-`http://localhost:9093`
+Expected file: `image/proof/03-airflow-dag.png`
 
-### 5. Confirm Prometheus sees Alertmanager
+![Proof Placeholder - Airflow DAG](image/proof/03-airflow-dag.png)
 
-Open:
+### Proof 4: MLflow Experiment / Registry
 
-`http://localhost:9090/config`
+Expected file: `image/proof/04-mlflow.png`
 
-and verify the `alerting` section contains `alertmanager:9093`.
+![Proof Placeholder - MLflow](image/proof/04-mlflow.png)
 
-### 6. Trigger a test alert
+### Proof 5: Prometheus Targets / Alerts
 
-An easy test is to stop the API temporarily:
+Expected file: `image/proof/05-prometheus.png`
 
-```bash
-docker compose stop api
-```
+![Proof Placeholder - Prometheus](image/proof/05-prometheus.png)
 
-Wait about a minute. This should fire `GalaxyAPIUnavailable`.
+### Proof 6: Grafana Dashboard
 
-Then bring it back:
+Expected file: `image/proof/06-grafana-dashboard.png`
 
-```bash
-docker compose start api
-```
+![Proof Placeholder - Grafana Dashboard](image/proof/06-grafana-dashboard.png)
 
-Mailtrap should receive the alert email and then a resolved notification.
+### Proof 7: Adminer / SQL Evidence
 
-## Current alert rules
+Expected file: `image/proof/07-adminer-sql.png`
 
-- `GalaxyAPIUnavailable`
-- `GalaxyDBUnavailable`
-- `GalaxyModelUnavailable`
-- `GalaxyDriftHigh`
-- `GalaxyLiveAccuracyLow`
-- `GalaxyAPILatencyHigh`
-- `GalaxyCSVValidationFailuresSpike`
+![Proof Placeholder - Adminer SQL](image/proof/07-adminer-sql.png)
 
----
+### Proof 8: Alert Email / Mailtrap
 
-## Troubleshooting
+Expected file: `image/proof/08-mailtrap-alert.png`
 
-## 1. No dashboard appears in Grafana
+![Proof Placeholder - Mailtrap Alert](image/proof/08-mailtrap-alert.png)
 
-Check:
+### Proof 9: Latest Generated Report
 
-```bash
-docker compose logs grafana
-```
+Expected file: `image/proof/09-latest-report.png`
 
-Then confirm these paths exist in the repo:
+![Proof Placeholder - Latest Report](image/proof/09-latest-report.png)
 
-- `monitoring/grafana/provisioning/datasources/datasource.yml`
-- `monitoring/grafana/provisioning/dashboards/dashboard.yml`
-- `monitoring/grafana/dashboards/galaxy_mlops_dashboard.json`
+## Result Summary
 
-## 2. Logs do not show in Grafana
+The project now demonstrates a full MLOps lifecycle:
 
-Check:
+- reproducible training with DVC
+- operational orchestration with Airflow
+- durable application and pipeline metadata in Postgres
+- experiment tracking and registry promotion with MLflow
+- user-facing prediction and feedback workflows
+- monitoring, logs, dashboards, and alerts
+- deployable multi-service Docker stack
 
-```bash
-docker compose logs promtail
-docker compose logs loki
-```
+## Limitations
 
-Then verify your application is actually writing files into `logs/*.log` and `airflow/logs/**`.
+- reports still remain file-based by design
+- large binary datasets and trained model files remain on disk rather than in Postgres
+- proof images must still be captured manually after deployment
 
-## 3. Adminer cannot connect to Postgres
+## Final Submission Checklist
 
-Make sure the stack is up and use:
+- [ ] `.env` configured
+- [ ] `docker compose up -d --build` completed
+- [ ] frontend prediction tested
+- [ ] feedback upload tested
+- [ ] Airflow DAG triggered
+- [ ] MLflow registry checked
+- [ ] Prometheus verified
+- [ ] Grafana verified
+- [ ] Adminer SQL proof captured
+- [ ] Mailtrap alert proof captured
+- [ ] screenshots saved in `image/proof/`
 
-- server: `postgres`
-- username: `galaxy`
-- password: `galaxy`
-- database: `galaxy_app`
-
-## 4. MLflow fails on startup after switching from SQLite
-
-The most common cause is an old Postgres volume or missing DB/user initialization.
-
-Reset once:
-
-```bash
-docker compose down -v
-docker compose up --build
-```
-
-## 5. Correction CSV upload fails immediately
-
-Make sure the CSV was downloaded from the **Recent predictions** export button and only edited in the `corrected_label` column for rows that need correction.
-
----
-
-## Validation and sanity commands
-
-```bash
-python -m compileall src api/app model_service/app frontend airflow/dags tests
-pytest tests -q
-```
-
----
-
-## Demo sequence
-
-For evaluation/demo recording, show this order:
-
-1. `docker compose up --build`
-2. Frontend single-image prediction
-3. Frontend ZIP batch upload
-4. Recent predictions date filter
-5. CSV export
-6. Upload an intentionally bad correction CSV and show popup errors
-7. Upload a corrected CSV successfully
-8. Open Adminer and query `predictions` / `feedback_corrections`
-9. Open MLflow
-10. Open Prometheus targets
-11. Open Grafana dashboard and logs
-12. Trigger an alert test and show Mailtrap receiving the email
-
-
-## MLflow 3 registry
-
-This repo now targets MLflow 3.11.1 and uses a `champion` model alias for serving (`models:/galaxy_morphology_classifier@champion`).

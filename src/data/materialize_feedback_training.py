@@ -7,8 +7,9 @@ from pathlib import Path
 
 from psycopg.rows import dict_row
 
+from src.common.artifact_store import store_pipeline_artifact
 from src.common.config import get_config_value, load_config, project_root, resolve_path
-from src.common.io_utils import ensure_dir, reset_dir, write_json
+from src.common.io_utils import ensure_dir, reset_dir
 from src.common.logging_utils import configure_logging
 from src.common.postgres import get_db_connection, initialize_database
 
@@ -92,7 +93,7 @@ def initialize_feedback_training_snapshot(
         "class_counts": {},
         "skipped_invalid_labels": {},
     }
-    write_json(summary_path, summary)
+    store_pipeline_artifact("feedback_training_summary", summary, config=config)
     LOGGER.info("Initialized empty feedback training snapshot at %s", output_root)
     return summary
 
@@ -161,7 +162,7 @@ def materialize_feedback_training_dataset(
         "class_counts": class_counts,
         "skipped_invalid_labels": skipped_invalid_labels,
     }
-    write_json(summary_path, summary)
+    store_pipeline_artifact("feedback_training_summary", summary, config=config)
     LOGGER.info("Feedback training snapshot materialized: %s", summary)
     return summary
 

@@ -9,8 +9,8 @@ from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_su
 from torch.utils.data import DataLoader
 from torchvision import datasets
 
+from src.common.artifact_store import store_pipeline_artifact
 from src.common.config import get_config_value, load_config, resolve_path
-from src.common.io_utils import read_json, write_json
 from src.common.logging_utils import configure_logging
 from src.common.postgres import get_db_connection, initialize_database
 from src.training.train import make_transforms
@@ -26,7 +26,6 @@ def _row_value(row, key: str, index: int):
 
 def evaluate_offline() -> dict:
     config = load_config()
-    metrics_path = resolve_path(config, 'paths.test_metrics_path')
     model_dir = resolve_path(config, 'paths.models_dir')
     test_dir = resolve_path(config, 'paths.processed_final_dir') / 'test'
     if not model_dir.exists() or not test_dir.exists():
@@ -35,7 +34,7 @@ def evaluate_offline() -> dict:
             'model_dir': str(model_dir),
             'test_dir': str(test_dir),
         }
-        write_json(metrics_path, metrics)
+        store_pipeline_artifact('test_metrics', metrics, config=config)
         LOGGER.warning('Offline evaluation skipped: %s', metrics)
         return metrics
 
@@ -72,7 +71,7 @@ def evaluate_offline() -> dict:
         'test_samples': len(test_data),
         'model_dir': str(model_dir),
     }
-    write_json(metrics_path, metrics)
+    store_pipeline_artifact('test_metrics', metrics, config=config)
     LOGGER.info('Offline evaluation snapshot: %s', metrics)
     return metrics
 
@@ -100,11 +99,11 @@ def evaluate_live_feedback(predictions_db_path: str | Path | None = None) -> dic
                 rows = cur.fetchall()
     except Exception as exc:  # noqa: BLE001
         LOGGER.warning('Live feedback database not ready: %s', exc)
-        write_json(resolve_path(config, 'paths.live_metrics_path'), metrics)
+        store_pipeline_artifact('live_metrics', metrics, config=config)
         return metrics
 
     if not rows:
-        write_json(resolve_path(config, 'paths.live_metrics_path'), metrics)
+        store_pipeline_artifact('live_metrics', metrics, config=config)
         LOGGER.info('No live feedback rows available.')
         return metrics
 
@@ -115,7 +114,7 @@ def evaluate_live_feedback(predictions_db_path: str | Path | None = None) -> dic
         'accuracy': round(float(accuracy_score(y_true, y_pred)), 6),
         'macro_f1': round(float(f1_score(y_true, y_pred, average='macro')), 6),
     }
-    write_json(resolve_path(config, 'paths.live_metrics_path'), metrics)
+    store_pipeline_artifact('live_metrics', metrics, config=config)
     LOGGER.info('Live feedback evaluation complete: %s', metrics)
     return metrics
 

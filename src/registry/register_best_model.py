@@ -8,8 +8,8 @@ from typing import Any
 import mlflow
 from mlflow.tracking import MlflowClient
 
+from src.common.artifact_store import load_pipeline_artifact, store_pipeline_artifact
 from src.common.config import get_config_value, load_config, resolve_path
-from src.common.io_utils import read_json, write_json
 from src.common.logging_utils import configure_logging
 
 LOGGER = configure_logging('model_registry')
@@ -21,16 +21,8 @@ def _tracking_uri(config: dict) -> str:
 
 def _candidate_metric(config: dict, metric_name: str) -> tuple[float | None, str | None]:
     source_names = get_config_value(config, 'registry.comparison_metric_sources', ['test_metrics', 'validation_metrics'])
-    source_map = {
-        'test_metrics': resolve_path(config, 'paths.test_metrics_path'),
-        'validation_metrics': resolve_path(config, 'paths.validation_metrics_path'),
-        'train_metrics': resolve_path(config, 'paths.train_metrics_path'),
-    }
     for source_name in source_names:
-        path = source_map.get(source_name)
-        if not path or not path.exists():
-            continue
-        payload = read_json(path, {}) or {}
+        payload = load_pipeline_artifact(source_name, config=config, default={}) or {}
         if metric_name in payload and isinstance(payload[metric_name], (int, float)):
             return float(payload[metric_name]), source_name
         fallback_name = f'final_validation_{metric_name}'
@@ -42,10 +34,10 @@ def _candidate_metric(config: dict, metric_name: str) -> tuple[float | None, str
 def _resolve_run_id(config: dict, explicit_run_id: str | None) -> str:
     if explicit_run_id:
         return explicit_run_id
-    train_metrics = read_json(resolve_path(config, 'paths.train_metrics_path'), {}) or {}
+    train_metrics = load_pipeline_artifact('train_metrics', config=config, default={}) or {}
     run_id = train_metrics.get('run_id')
     if not run_id:
-        raise RuntimeError('Could not determine MLflow run_id from artifacts/train_metrics.json')
+        raise RuntimeError('Could not determine MLflow run_id from the latest train_metrics artifact in Postgres.')
     return str(run_id)
 
 
@@ -143,7 +135,7 @@ def register_best_model(run_id: str | None = None) -> dict[str, Any]:
         'serving_model_uri': f'models:/{model_name}@{champion_alias}',
         'decision_reason': reason,
     }
-    write_json(resolve_path(config, 'paths.registry_status_path'), status)
+    store_pipeline_artifact('registry_status', status, config=config, run_id=resolved_run_id, recorded_at=status['registered_at'])
     LOGGER.info('Registry status: %s', status)
     return status
 

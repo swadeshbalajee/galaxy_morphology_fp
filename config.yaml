@@ -56,8 +56,8 @@ data:
   train_split: 0.70
   val_split: 0.15
   test_split: 0.15
-  max_images_per_class: 500
-  target_images_per_class: 500
+  max_images_per_class: 100
+  target_images_per_class: 100
   min_required_class_count: 5
   allowed_suffixes: [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
   normalize_mean: [0.485, 0.456, 0.406]
@@ -99,15 +99,11 @@ reporting:
   report_title: Galaxy Morphology Training and Monitoring Report
 
 email:
-  enabled: false
-  sender: galaxy-mlops@example.com
+  enabled: true
+  connection_id: smtp_default
+  sender: ""
   recipients:
-    - evaluator@example.com
-  smtp_host: smtp.example.com
-  smtp_port: 587
-  use_tls: true
-  username_env: SMTP_USERNAME
-  password_env: SMTP_PASSWORD
+    - swadeshbalajee13@gmail.com
   subject_prefix: "[Galaxy MLOps]"
 
 services:

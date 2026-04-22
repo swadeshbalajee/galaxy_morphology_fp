@@ -38,13 +38,13 @@ groups:
           description: The latest input brightness drift z-score stayed above 3 for two minutes.
 
       - alert: GalaxyLiveAccuracyLow
-        expr: galaxy_live_feedback_accuracy < 0.85 and galaxy_live_feedback_count >= 5
+        expr: galaxy_live_feedback_accuracy < 0.85
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: Live feedback accuracy dropped below threshold
-          description: Live accuracy is below 0.85 while feedback sample size is at least 5.
+          description: Live accuracy is below 0.85. Review recent feedback and model performance.
 
       - alert: GalaxyAPILatencyHigh
         expr: histogram_quantile(0.95, sum(rate(galaxy_api_request_latency_seconds_bucket[5m])) by (le, endpoint)) > 1.5

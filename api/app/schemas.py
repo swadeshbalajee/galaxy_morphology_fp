@@ -15,6 +15,8 @@ class PredictionResponse(BaseModel):
     predicted_label: str
     top_k: list[dict]
     model_version: str
+    model_alias: str | None = None
+    model_source: str | None = None
     latency_ms: float = Field(ge=0)
     brightness_zscore: float | None = None
 
@@ -41,3 +43,8 @@ class FeedbackCsvUploadResponse(BaseModel):
     row_count: int
     upload_id: str | None = None
     errors: list[dict] = Field(default_factory=list)
+
+
+class HealthResponse(BaseModel):
+    status: str
+    service: str

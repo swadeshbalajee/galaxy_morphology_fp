@@ -4,8 +4,8 @@ from fastapi import FastAPI, Response
 from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Gauge, generate_latest
 from psycopg.rows import dict_row
 
+from src.common.artifact_store import load_pipeline_artifact
 from src.common.config import load_config, resolve_path
-from src.common.io_utils import read_json
 from src.common.logging_utils import configure_logging
 from src.common.postgres import get_db_connection, initialize_database
 
@@ -34,10 +34,10 @@ def metrics():
     g_prediction_db_count = Gauge('galaxy_db_prediction_count', 'Total predictions stored in Postgres.', registry=registry)
     g_correction_db_count = Gauge('galaxy_db_correction_count', 'Total corrections stored in Postgres.', registry=registry)
 
-    test_metrics = read_json(resolve_path(config, 'paths.test_metrics_path'), {})
-    live_metrics = read_json(resolve_path(config, 'paths.live_metrics_path'), {})
-    raw_summary = read_json(resolve_path(config, 'paths.raw_summary_path'), {})
-    runtime_summary = read_json(resolve_path(config, 'paths.pipeline_runtime_summary_path'), {})
+    test_metrics = load_pipeline_artifact('test_metrics', config=config, default={})
+    live_metrics = load_pipeline_artifact('live_metrics', config=config, default={})
+    raw_summary = load_pipeline_artifact('raw_summary', config=config, default={})
+    runtime_summary = load_pipeline_artifact('pipeline_runtime_summary', config=config, default={})
 
     if isinstance(test_metrics.get('accuracy'), (int, float)):
         g_test_accuracy.set(float(test_metrics['accuracy']))

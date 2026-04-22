@@ -3,8 +3,8 @@ from __future__ import annotations
 import argparse
 from datetime import UTC, datetime
 
+from src.common.artifact_store import load_pipeline_artifact, merge_pipeline_artifact
 from src.common.config import get_config_value, load_config, resolve_path
-from src.common.io_utils import read_json, write_json
 from src.common.logging_utils import configure_logging
 from src.training.evaluate import evaluate_live_feedback
 
@@ -17,15 +17,15 @@ def _utc_now_iso() -> str:
 
 def generate_report() -> dict:
     config = load_config()
-    raw_summary = read_json(resolve_path(config, 'paths.raw_summary_path'), {})
-    processed_v1_summary = read_json(resolve_path(config, 'paths.processed_v1_summary_path'), {})
-    processed_final_summary = read_json(resolve_path(config, 'paths.processed_final_summary_path'), {})
-    train_metrics = read_json(resolve_path(config, 'paths.train_metrics_path'), {})
-    validation_metrics = read_json(resolve_path(config, 'paths.validation_metrics_path'), {})
-    test_metrics = read_json(resolve_path(config, 'paths.test_metrics_path'), {})
+    raw_summary = load_pipeline_artifact('raw_summary', config=config, default={})
+    processed_v1_summary = load_pipeline_artifact('processed_v1_summary', config=config, default={})
+    processed_final_summary = load_pipeline_artifact('processed_final_summary', config=config, default={})
+    train_metrics = load_pipeline_artifact('train_metrics', config=config, default={})
+    validation_metrics = load_pipeline_artifact('validation_metrics', config=config, default={})
+    test_metrics = load_pipeline_artifact('test_metrics', config=config, default={})
     live_metrics = evaluate_live_feedback()
-    runtime_summary = read_json(resolve_path(config, 'paths.pipeline_runtime_summary_path'), {})
-    registry_status = read_json(resolve_path(config, 'paths.registry_status_path'), {})
+    runtime_summary = load_pipeline_artifact('pipeline_runtime_summary', config=config, default={})
+    registry_status = load_pipeline_artifact('registry_status', config=config, default={})
     registry_data = registry_status if isinstance(registry_status, dict) else {}
 
     created_at = _utc_now_iso()
@@ -136,7 +136,13 @@ def generate_report() -> dict:
     md_path.parent.mkdir(parents=True, exist_ok=True)
     md_path.write_text('\n'.join(md_lines), encoding='utf-8')
     html_path.write_text(html, encoding='utf-8')
-    write_json(resolve_path(config, 'paths.pipeline_runtime_summary_path'), {**runtime_summary, 'last_report_generated_at': created_at})
+    merge_pipeline_artifact(
+        'pipeline_runtime_summary',
+        {'last_report_generated_at': created_at},
+        config=config,
+        stage_name='report',
+        recorded_at=created_at,
+    )
     LOGGER.info('Report generated at %s', md_path)
     return report
 

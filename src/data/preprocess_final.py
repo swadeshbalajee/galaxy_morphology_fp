@@ -8,8 +8,9 @@ import shutil
 import time
 from pathlib import Path
 
+from src.common.artifact_store import store_pipeline_artifact
 from src.common.config import get_config_value, load_config, resolve_path
-from src.common.io_utils import class_dirs, ensure_dir, list_image_files, reset_dir, write_json
+from src.common.io_utils import class_dirs, ensure_dir, list_image_files, reset_dir
 from src.common.logging_utils import configure_logging
 from src.data.validate import validate_dataset_layout
 from src.features.baseline import save_baseline
@@ -82,6 +83,7 @@ def build_training_ready_dataset(source_dir: str | Path, output_dir: str | Path,
         writer.writerows(manifest_rows)
 
     baseline = save_baseline(output_dir / "train", resolve_path(config, "paths.drift_baseline_path"))
+    store_pipeline_artifact("drift_baseline", baseline, config=config, keep_local=True)
     summary = {
         "stage": "preprocess_final",
         "source_dir": str(source_dir),
@@ -92,7 +94,7 @@ def build_training_ready_dataset(source_dir: str | Path, output_dir: str | Path,
         "baseline": baseline,
         "duration_seconds": round(time.time() - start, 3),
     }
-    write_json(resolve_path(config, "paths.processed_final_summary_path"), summary)
+    store_pipeline_artifact("processed_final_summary", summary, config=config)
     LOGGER.info("Final preprocessing summary: %s", summary)
     return summary
 

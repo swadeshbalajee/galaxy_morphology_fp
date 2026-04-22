@@ -5,8 +5,13 @@ stages:
     deps:
     - path: config.yaml
       hash: md5
-      md5: 574d6837b8a9aea2e6a2bb75149886cb
-      size: 4084
+      md5: 88569b7249ba51e49fc868837fe35724
+      size: 3973
+      isexec: true
+    - path: src/common/artifact_store.py
+      hash: md5
+      md5: a16f131917597ac3fff0112aae0c06e1
+      size: 6926
       isexec: true
     - path: src/common/config.py
       hash: md5
@@ -18,34 +23,40 @@ stages:
       md5: 6d09d23cf690b11edbb2d5d8ea32abf0
       size: 1359
       isexec: true
+    - path: src/common/postgres.py
+      hash: md5
+      md5: 7c4d5244601750cea8a0d65095ebc890
+      size: 12363
+      isexec: true
     - path: src/data/download_galaxy_zoo.py
       hash: md5
-      md5: 5206a040fe6e007051c60f8e574140ef
-      size: 17811
+      md5: 18f78620fc999ebd754843296526148a
+      size: 17786
       isexec: true
     outs:
-    - path: artifacts/raw_data_summary.json
-      hash: md5
-      md5: 82c6ff02a5b4ac6d01136dac1199131e
-      size: 1773
     - path: data/raw/galaxy_dataset
       hash: md5
-      md5: 71a4e09c8c382188829fbd72fa986ab3.dir
-      size: 35552000
-      nfiles: 2500
+      md5: 4364d8a0743a507c6cc534bc0ea87240.dir
+      size: 7110883
+      nfiles: 500
   preprocess_v1:
     cmd: /opt/venvs/training/bin/python -m src.data.preprocess_v1
     deps:
     - path: config.yaml
       hash: md5
-      md5: 574d6837b8a9aea2e6a2bb75149886cb
-      size: 4084
+      md5: 88569b7249ba51e49fc868837fe35724
+      size: 3973
       isexec: true
     - path: data/raw/galaxy_dataset
       hash: md5
-      md5: 71a4e09c8c382188829fbd72fa986ab3.dir
-      size: 35552000
-      nfiles: 2500
+      md5: 4364d8a0743a507c6cc534bc0ea87240.dir
+      size: 7110883
+      nfiles: 500
+    - path: src/common/artifact_store.py
+      hash: md5
+      md5: a16f131917597ac3fff0112aae0c06e1
+      size: 6926
+      isexec: true
     - path: src/common/config.py
       hash: md5
       md5: 80cb1ba6c5ab567774513780b6f7a8a7
@@ -56,10 +67,15 @@ stages:
       md5: 6d09d23cf690b11edbb2d5d8ea32abf0
       size: 1359
       isexec: true
+    - path: src/common/postgres.py
+      hash: md5
+      md5: 7c4d5244601750cea8a0d65095ebc890
+      size: 12363
+      isexec: true
     - path: src/data/preprocess_v1.py
       hash: md5
-      md5: 3aa8e420e8c79d7be22644b2b23e37c9
-      size: 2564
+      md5: 2190a1c6d642bff7563e6b471a80b834
+      size: 2609
       isexec: true
     - path: src/data/validate.py
       hash: md5
@@ -67,28 +83,29 @@ stages:
       size: 2099
       isexec: true
     outs:
-    - path: artifacts/processed_v1_summary.json
-      hash: md5
-      md5: e9f0519d7fb81d9336046a32d09b1d4a
-      size: 351
     - path: data/processed/v1
       hash: md5
-      md5: 88dfb52596c2c611e1533101bfd6dd8b.dir
-      size: 39940230
-      nfiles: 2500
+      md5: 9ed6634f531c736bdb0e412d69397a17.dir
+      size: 7986917
+      nfiles: 500
   preprocess_final:
     cmd: /opt/venvs/training/bin/python -m src.data.preprocess_final
     deps:
     - path: config.yaml
       hash: md5
-      md5: 574d6837b8a9aea2e6a2bb75149886cb
-      size: 4084
+      md5: 88569b7249ba51e49fc868837fe35724
+      size: 3973
       isexec: true
     - path: data/processed/v1
       hash: md5
-      md5: 88dfb52596c2c611e1533101bfd6dd8b.dir
-      size: 39940230
-      nfiles: 2500
+      md5: 9ed6634f531c736bdb0e412d69397a17.dir
+      size: 7986917
+      nfiles: 500
+    - path: src/common/artifact_store.py
+      hash: md5
+      md5: a16f131917597ac3fff0112aae0c06e1
+      size: 6926
+      isexec: true
     - path: src/common/config.py
       hash: md5
       md5: 80cb1ba6c5ab567774513780b6f7a8a7
@@ -99,10 +116,15 @@ stages:
       md5: 6d09d23cf690b11edbb2d5d8ea32abf0
       size: 1359
       isexec: true
+    - path: src/common/postgres.py
+      hash: md5
+      md5: 7c4d5244601750cea8a0d65095ebc890
+      size: 12363
+      isexec: true
     - path: src/data/preprocess_final.py
       hash: md5
-      md5: 41d6c3e7bd37a4a570281d08fd9a99de
-      size: 4545
+      md5: 9ff199eff5b67ff45deb9ecbdaf8f519
+      size: 4678
       isexec: true
     - path: src/data/validate.py
       hash: md5
@@ -117,49 +139,45 @@ stages:
     outs:
     - path: artifacts/data_manifest.csv
       hash: md5
-      md5: 3da35d17f4e7c728b98a708d40473b4b
-      size: 354648
+      md5: 31d31410d8fe745747ad49ef03ce3df1
+      size: 70944
     - path: artifacts/drift_baseline.json
       hash: md5
-      md5: fed43d01b8b5c9bd9f1f8c2be2a6fc6b
-      size: 142
-    - path: artifacts/processed_final_summary.json
-      hash: md5
-      md5: d23160ada9fc257e55d202a5618b7c80
-      size: 854
+      md5: d6f7083f987979f475f6fdc5ec6cad95
+      size: 141
     - path: data/processed/final
       hash: md5
-      md5: 409d17f9beefc9b42fdc4b47ffd0f411.dir
-      size: 39940230
-      nfiles: 2500
+      md5: 3e950ae2fd812188e9f3a885e1ec3c2c.dir
+      size: 7986917
+      nfiles: 500
   train:
     cmd: /opt/venvs/training/bin/python -m src.training.train
     deps:
     - path: artifacts/feedback_training_manifest.csv
       hash: md5
-      md5: da242cc7f92cdc191ff6b0f2c123d1a5
-      size: 1411
-      isexec: true
-    - path: artifacts/feedback_training_summary.json
-      hash: md5
-      md5: 38c3a90d447325da5ef71662b6874971
-      size: 444
+      md5: b3dba79916b2ba075693c57cf28083db
+      size: 2942
       isexec: true
     - path: config.yaml
       hash: md5
-      md5: 574d6837b8a9aea2e6a2bb75149886cb
-      size: 4084
+      md5: 88569b7249ba51e49fc868837fe35724
+      size: 3973
       isexec: true
     - path: data/feedback/training_feedback
       hash: md5
-      md5: 09ef1d562e96adf1f1ab5aa14aa7a6f7.dir
-      size: 93099
-      nfiles: 6
+      md5: 462938944cceb961f22c495c638cca32.dir
+      size: 223791
+      nfiles: 14
     - path: data/processed/final
       hash: md5
-      md5: 409d17f9beefc9b42fdc4b47ffd0f411.dir
-      size: 39940230
-      nfiles: 2500
+      md5: 3e950ae2fd812188e9f3a885e1ec3c2c.dir
+      size: 7986917
+      nfiles: 500
+    - path: src/common/artifact_store.py
+      hash: md5
+      md5: a16f131917597ac3fff0112aae0c06e1
+      size: 6926
+      isexec: true
     - path: src/common/config.py
       hash: md5
       md5: 80cb1ba6c5ab567774513780b6f7a8a7
@@ -170,6 +188,11 @@ stages:
       md5: 6d09d23cf690b11edbb2d5d8ea32abf0
       size: 1359
       isexec: true
+    - path: src/common/postgres.py
+      hash: md5
+      md5: 7c4d5244601750cea8a0d65095ebc890
+      size: 12363
+      isexec: true
     - path: src/training/model_def.py
       hash: md5
       md5: fe6b4b8a7c330ddad123f2b1e394323d
@@ -177,25 +200,17 @@ stages:
       isexec: true
     - path: src/training/train.py
       hash: md5
-      md5: 84fbf0b0e1e54eda75aef8a1c8fcb7b0
-      size: 13740
+      md5: f4e638eeadc207f6bccdfc64bc6ed2c2
+      size: 13919
       isexec: true
     outs:
     - path: artifacts/confusion_matrix.csv
       hash: md5
-      md5: 7f2812d351a16d97a7d8c66e4b739bcb
-      size: 153
-    - path: artifacts/train_metrics.json
-      hash: md5
-      md5: 77fb56be59a0007eabc0b70a782e901b
-      size: 1673
-    - path: artifacts/validation_metrics.json
-      hash: md5
-      md5: 95e290e5b9441c8a30fcd337f42951dd
-      size: 336
+      md5: 6cc743876b8ccc067abaaf9618a90d8b
+      size: 145
     - path: models/latest
       hash: md5
-      md5: b425319ed3b100be2a614936a5d15df3.dir
+      md5: f1226c7831b24dcfc7b95db7778320a8.dir
       size: 44801461
       nfiles: 7
   evaluate:
@@ -213,7 +228,7 @@ stages:
       nfiles: 375
     - path: models/latest
       hash: md5
-      md5: b425319ed3b100be2a614936a5d15df3.dir
+      md5: ad5e18eff84993c35e1b3a0d5f537643.dir
       size: 44801461
       nfiles: 7
     - path: src/common/config.py
@@ -234,70 +249,56 @@ stages:
     outs:
     - path: artifacts/live_metrics.json
       hash: md5
-      md5: 8770e541e17fb0382a28ab3a53ba2756
-      size: 63
+      md5: 0d89e94f8dd688aadae67dd82f1becde
+      size: 64
     - path: artifacts/test_metrics.json
       hash: md5
-      md5: 759557ce3593eb7ad4039a6eb8b7f097
-      size: 316
+      md5: 56b52320027ce83b48302c04ab3e45bb
+      size: 319
   report:
     cmd: /opt/venvs/training/bin/python -m src.reporting.generate_report
     deps:
-    - path: artifacts/processed_final_summary.json
-      hash: md5
-      md5: d23160ada9fc257e55d202a5618b7c80
-      size: 854
-    - path: artifacts/processed_v1_summary.json
-      hash: md5
-      md5: e9f0519d7fb81d9336046a32d09b1d4a
-      size: 351
-    - path: artifacts/raw_data_summary.json
-      hash: md5
-      md5: 82c6ff02a5b4ac6d01136dac1199131e
-      size: 1773
-    - path: artifacts/test_metrics.json
-      hash: md5
-      md5: 759557ce3593eb7ad4039a6eb8b7f097
-      size: 316
-    - path: artifacts/train_metrics.json
-      hash: md5
-      md5: 77fb56be59a0007eabc0b70a782e901b
-      size: 1673
-    - path: artifacts/validation_metrics.json
-      hash: md5
-      md5: 95e290e5b9441c8a30fcd337f42951dd
-      size: 336
     - path: config.yaml
       hash: md5
-      md5: 574d6837b8a9aea2e6a2bb75149886cb
-      size: 4084
+      md5: 88569b7249ba51e49fc868837fe35724
+      size: 3973
+      isexec: true
+    - path: models/latest
+      hash: md5
+      md5: f1226c7831b24dcfc7b95db7778320a8.dir
+      size: 44801461
+      nfiles: 7
+    - path: src/common/artifact_store.py
+      hash: md5
+      md5: a16f131917597ac3fff0112aae0c06e1
+      size: 6926
       isexec: true
     - path: src/common/config.py
       hash: md5
       md5: 80cb1ba6c5ab567774513780b6f7a8a7
       size: 1424
       isexec: true
-    - path: src/common/io_utils.py
+    - path: src/common/postgres.py
       hash: md5
-      md5: 6d09d23cf690b11edbb2d5d8ea32abf0
-      size: 1359
+      md5: 7c4d5244601750cea8a0d65095ebc890
+      size: 12363
       isexec: true
     - path: src/reporting/generate_report.py
       hash: md5
-      md5: 3db5011475a40bc1eebb88b08399edfb
-      size: 6951
+      md5: 35c880f419fd78e3c22a921056722f4a
+      size: 7075
       isexec: true
     - path: src/training/evaluate.py
       hash: md5
-      md5: 013eb9af8b42f7f7a127820ea342c105
-      size: 4862
+      md5: 3d4d5f1bc8737e69bd3a4b18b976da1f
+      size: 4848
       isexec: true
     outs:
     - path: artifacts/reports/latest_report.html
       hash: md5
-      md5: 07ea8db7c1ddb6c2a520c9cea70afecb
-      size: 1467
+      md5: 5cff627470274a6049ce7ac8b79c1079
+      size: 1494
     - path: artifacts/reports/latest_report.md
       hash: md5
-      md5: 77b23c0049e15ec3f46c66f662b747b1
-      size: 1653
+      md5: cca47fdc19885c73fbc3ba828ab872a2
+      size: 1674

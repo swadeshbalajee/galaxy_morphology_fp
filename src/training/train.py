@@ -19,8 +19,8 @@ from sklearn.metrics import classification_report, confusion_matrix, precision_r
 from torch.utils.data import ConcatDataset, DataLoader, Dataset
 from torchvision import datasets, transforms
 
+from src.common.artifact_store import merge_pipeline_artifact, store_pipeline_artifact
 from src.common.config import get_config_value, load_config, project_root, resolve_path
-from src.common.io_utils import write_json
 from src.common.logging_utils import configure_logging
 from src.training.model_def import build_model
 
@@ -243,7 +243,7 @@ def train(train_dir: str, val_dir: str, test_dir: str, export_dir: str):
         confusion_path = resolve_path(config, 'paths.confusion_matrix_path')
         confusion_df.to_csv(confusion_path)
         classification = classification_report(validation_metrics['targets'], validation_metrics['preds'], target_names=class_names, output_dict=True, zero_division=0)
-        write_json(resolve_path(config, 'paths.classification_report_path'), classification)
+        store_pipeline_artifact('classification_report', classification, config=config, run_id=run.info.run_id)
 
         total_duration = time.time() - start_time
         train_metrics = {
@@ -265,22 +265,28 @@ def train(train_dir: str, val_dir: str, test_dir: str, export_dir: str):
             'class_names': class_names,
             'model_dir': str(export_dir),
         }
-        write_json(resolve_path(config, 'paths.train_metrics_path'), train_metrics)
-        write_json(resolve_path(config, 'paths.validation_metrics_path'), validation_summary)
-        write_json(resolve_path(config, 'paths.pipeline_runtime_summary_path'), {
-            'train_duration_seconds': round(total_duration, 3),
-            'epochs_completed': len(epoch_history),
-            'train_samples': len(train_data),
-            'feedback_train_samples': feedback_train_samples,
-            'val_samples': len(val_data),
-            'test_samples': len(test_data),
-        })
+        store_pipeline_artifact('train_metrics', train_metrics, config=config, run_id=run.info.run_id)
+        store_pipeline_artifact('validation_metrics', validation_summary, config=config, run_id=run.info.run_id)
+        merge_pipeline_artifact(
+            'pipeline_runtime_summary',
+            {
+                'train_duration_seconds': round(total_duration, 3),
+                'epochs_completed': len(epoch_history),
+                'train_samples': len(train_data),
+                'feedback_train_samples': feedback_train_samples,
+                'val_samples': len(val_data),
+                'test_samples': len(test_data),
+            },
+            config=config,
+            stage_name='train',
+            run_id=run.info.run_id,
+        )
 
         mlflow.log_metrics({f'final_validation_{k}': v for k, v in validation_summary.items() if isinstance(v, (int, float))})
         mlflow.log_artifact(str(confusion_path))
-        mlflow.log_artifact(str(resolve_path(config, 'paths.classification_report_path')))
-        mlflow.log_artifact(str(resolve_path(config, 'paths.train_metrics_path')))
-        mlflow.log_artifact(str(resolve_path(config, 'paths.validation_metrics_path')))
+        mlflow.log_dict(classification, 'classification_report.json')
+        mlflow.log_dict(train_metrics, 'train_metrics.json')
+        mlflow.log_dict(validation_summary, 'validation_metrics.json')
         mlflow.pytorch.log_model(model, artifact_path='model')
         mlflow.log_artifacts(str(export_dir), artifact_path='local_export')
 
