@@ -115,7 +115,7 @@ class FeedbackStore:
                 if not row:
                     raise ValueError(f'Prediction {prediction_id} does not exist.')
                 if row['predicted_label'] == ground_truth_label:
-                    raise ValueError('The corrected label must be different from the predicted label.')
+                    raise ValueError('Feedback is only needed when the actual label differs from the predicted label.')
                 cur.execute(
                     """
                     INSERT INTO feedback_corrections(
@@ -250,8 +250,7 @@ class FeedbackStore:
                 except ValueError as exc:
                     errors.append({'row_number': row_number, 'error': str(exc)})
             if predicted_label and corrected_label and predicted_label == corrected_label:
-                errors.append({'row_number': row_number, 'error': '`predicted_label` must be different from `corrected_label`.'})
-
+                errors.append({'row_number': row_number, 'error': '`corrected_label` is only needed when it differs from `predicted_label`.'})
             prediction_id = normalized.get('prediction_id')
             if prediction_id:
                 with get_db_connection() as conn:

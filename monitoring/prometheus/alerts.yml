@@ -2,55 +2,61 @@ groups:
   - name: galaxy-mlops-alerts
     rules:
       - alert: GalaxyAPIUnavailable
-        expr: galaxy_api_ready == 0
+        expr: up{job="api"} == 0 or galaxy_api_ready == 0
         for: 1m
         labels:
           severity: critical
+          service: api
         annotations:
-          summary: API gateway is not ready
-          description: The API gateway readiness gauge is zero for more than one minute.
+          summary: API gateway is unavailable
+          description: The API gateway is either not scrapeable or its readiness gauge is zero for more than one minute.
+
+      - alert: GalaxyModelUnavailable
+        expr: up{job="model-service"} == 0 or galaxy_model_ready == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: model-service
+        annotations:
+          summary: Model service is unavailable
+          description: The model service is either not scrapeable or its readiness gauge is zero for more than one minute.
 
       - alert: GalaxyDBUnavailable
-        expr: galaxy_db_ready == 0
+        expr: up{job="postgres"} == 0 or galaxy_db_ready == 0
         for: 1m
         labels:
           severity: critical
+          service: postgres
         annotations:
           summary: Postgres connectivity failed from the API layer
           description: The API could not complete its database readiness check.
-
-      - alert: GalaxyModelUnavailable
-        expr: galaxy_model_ready == 0
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: Model service is not ready
-          description: The model service readiness gauge is zero for more than one minute.
 
       - alert: GalaxyDriftHigh
         expr: abs(galaxy_input_brightness_zscore) > 3
         for: 2m
         labels:
           severity: warning
+          service: api
         annotations:
           summary: Input drift brightness z-score exceeded threshold
           description: The latest input brightness drift z-score stayed above 3 for two minutes.
 
       - alert: GalaxyLiveAccuracyLow
-        expr: galaxy_live_feedback_accuracy < 0.85
+        expr: (galaxy_live_feedback_accuracy < 0.85) and on(job, instance) (galaxy_live_prediction_count >= 10)
         for: 5m
         labels:
           severity: warning
+          service: api
         annotations:
           summary: Live feedback accuracy dropped below threshold
-          description: Live accuracy is below 0.85. Review recent feedback and model performance.
+          description: Live accuracy for the latest model is below 0.85 after at least 10 predictions. Predictions without correction feedback are treated as correct.
 
       - alert: GalaxyAPILatencyHigh
         expr: histogram_quantile(0.95, sum(rate(galaxy_api_request_latency_seconds_bucket[5m])) by (le, endpoint)) > 1.5
         for: 5m
         labels:
           severity: warning
+          service: api
         annotations:
           summary: API latency p95 is high
           description: API latency p95 stayed above 1.5 seconds for five minutes.
@@ -60,6 +66,7 @@ groups:
         for: 1m
         labels:
           severity: info
+          service: api
         annotations:
           summary: One or more correction CSV uploads failed validation
           description: Review the frontend popup and API logs for row-level CSV validation errors.

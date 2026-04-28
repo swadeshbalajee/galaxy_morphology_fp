@@ -51,8 +51,17 @@ app.mount("/metrics", make_asgi_app())
 
 store: FeedbackStore | None = None
 model_client = ModelServiceClient()
-MAX_UPLOAD_MB = int(get_config_value(CONFIG, "runtime.max_upload_mb", 10))
-MAX_ZIP_UPLOAD_MB = int(get_config_value(CONFIG, "runtime.max_zip_upload_mb", 50))
+
+
+def _required_config(key: str):
+    value = get_config_value(CONFIG, key)
+    if value is None:
+        raise KeyError(f"Missing required config key: {key}")
+    return value
+
+
+MAX_UPLOAD_MB = int(_required_config("runtime.max_upload_mb"))
+MAX_ZIP_UPLOAD_MB = int(_required_config("runtime.max_zip_upload_mb"))
 ALLOWED_SUFFIXES = {
     suffix.lower()
     for suffix in get_config_value(

@@ -24,6 +24,34 @@ def _row_value(row, key: str, index: int):
     return row[index]
 
 
+def compute_live_feedback_metrics(rows: list[dict] | list[tuple]) -> dict:
+    metrics = {
+        'feedback_count': 0,
+        'prediction_count': 0,
+        'assumed_correct_count': 0,
+        'latest_model_version': None,
+        'accuracy': None,
+        'macro_f1': None,
+    }
+    if not rows:
+        return metrics
+
+    y_pred = [_row_value(row, 'predicted_label', 1) for row in rows]
+    y_true = [
+        _row_value(row, 'corrected_label', 2) or _row_value(row, 'predicted_label', 1)
+        for row in rows
+    ]
+    feedback_count = sum(1 for row in rows if _row_value(row, 'corrected_label', 2))
+    return {
+        'feedback_count': feedback_count,
+        'prediction_count': len(rows),
+        'assumed_correct_count': len(rows) - feedback_count,
+        'latest_model_version': _row_value(rows[-1], 'model_version', 0),
+        'accuracy': round(float(accuracy_score(y_true, y_pred)), 6),
+        'macro_f1': round(float(f1_score(y_true, y_pred, average='macro')), 6),
+    }
+
+
 def evaluate_offline() -> dict:
     config = load_config()
     model_dir = resolve_path(config, 'paths.models_dir')
@@ -81,6 +109,9 @@ def evaluate_live_feedback(predictions_db_path: str | Path | None = None) -> dic
     initialize_database()
     metrics = {
         'feedback_count': 0,
+        'prediction_count': 0,
+        'assumed_correct_count': 0,
+        'latest_model_version': None,
         'accuracy': None,
         'macro_f1': None,
     }
@@ -90,10 +121,20 @@ def evaluate_live_feedback(predictions_db_path: str | Path | None = None) -> dic
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT p.predicted_label, c.corrected_label
-                    FROM feedback_corrections c
-                    JOIN predictions p ON p.prediction_id = c.prediction_id
-                    ORDER BY c.created_at ASC
+                    WITH latest_model AS (
+                        SELECT model_version
+                        FROM predictions
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    )
+                    SELECT
+                        p.model_version,
+                        p.predicted_label,
+                        c.corrected_label
+                    FROM predictions p
+                    JOIN latest_model lm ON lm.model_version = p.model_version
+                    LEFT JOIN feedback_corrections c ON c.prediction_id = p.prediction_id
+                    ORDER BY p.created_at ASC
                     """,
                 )
                 rows = cur.fetchall()
@@ -104,16 +145,10 @@ def evaluate_live_feedback(predictions_db_path: str | Path | None = None) -> dic
 
     if not rows:
         store_pipeline_artifact('live_metrics', metrics, config=config)
-        LOGGER.info('No live feedback rows available.')
+        LOGGER.info('No live predictions available.')
         return metrics
 
-    y_pred = [_row_value(row, 'predicted_label', 0) for row in rows]
-    y_true = [_row_value(row, 'corrected_label', 1) for row in rows]
-    metrics = {
-        'feedback_count': len(rows),
-        'accuracy': round(float(accuracy_score(y_true, y_pred)), 6),
-        'macro_f1': round(float(f1_score(y_true, y_pred, average='macro')), 6),
-    }
+    metrics = compute_live_feedback_metrics(rows)
     store_pipeline_artifact('live_metrics', metrics, config=config)
     LOGGER.info('Live feedback evaluation complete: %s', metrics)
     return metrics

@@ -1,92 +1,171 @@
-
 # Low-Level Design
 
-## Configuration source
+## Module Map
 
-All core project behavior is driven by `config.yaml`.
+```mermaid
+flowchart TB
+  Config[src/common/config.py] --> Data[src/data]
+  Config --> Train[src/training]
+  Config --> API[api/app]
+  Config --> Model[model_service/app]
+  Postgres[src/common/postgres.py] --> API
+  Postgres --> Artifact[src/common/artifact_store.py]
+  Artifact --> Data
+  Artifact --> Train
+  Artifact --> Report[src/reporting/generate_report.py]
+  Artifact --> RuntimeReport[src/reporting/generate_runtime_report.py]
+  Train --> Registry[src/registry/register_best_model.py]
+  Model --> Registry
+  API --> Feedback[api/app/feedback_store.py]
+  Feedback --> Postgres
+```
 
-Key sections:
+## Configuration Contract
 
-- `paths`
-- `data`
-- `training`
-- `continuous_improvement`
-- `email`
-- `services`
+All major behavior is driven by `config.yaml`.
 
-## DVC stages
+| Section | Used for |
+|---|---|
+| `project` | Project name and random seed |
+| `paths` | Data, model, artifact, report, and legacy state paths |
+| `runtime` | Config env names and upload limits |
+| `data` | Classes, source URLs, image sizes, splits, thresholds |
+| `training` | Epochs, batch size, learning rate, backbone |
+| `inference` | Top-k output size |
+| `continuous_improvement` | Retraining thresholds and Airflow schedule |
+| `reporting` | Report title and report behavior |
+| `email` | Airflow report email settings |
+| `services` | Internal service URLs |
+| `registry` | MLflow model name, champion alias, comparison metric |
 
-### `fetch_raw`
-- module: `src.data.download_galaxy_zoo`
-- input: source URLs from config
-- output: `data/raw/galaxy_dataset`, `artifacts/raw_data_summary.json`
+## DVC Stage Details
 
-### `preprocess_v1`
-- module: `src.data.preprocess_v1`
-- input: raw dataset
-- output: `data/processed/v1`, `artifacts/processed_v1_summary.json`
+```mermaid
+flowchart LR
+  A[download_galaxy_zoo.py] -->|raw_summary| DB[(Postgres artifacts)]
+  A --> Raw[data/raw/galaxy_dataset]
+  Raw --> B[preprocess_v1.py]
+  B -->|processed_v1_summary| DB
+  B --> V1[data/processed/v1]
+  V1 --> C[preprocess_final.py]
+  C -->|processed_final_summary| DB
+  C --> Final[data/processed/final]
+  C --> Drift[artifacts/drift_baseline.json]
+  Final --> D[train.py]
+  D -->|train and validation metrics| DB
+  D --> Model[models/latest]
+  Model --> E[evaluate.py]
+  E -->|test and live metrics| DB
+  E --> F[generate_report.py]
+  F --> Reports[artifacts/reports/latest_report.*]
+```
 
-### `preprocess_final`
-- module: `src.data.preprocess_final`
-- input: processed v1
-- output: `data/processed/final`, manifest, drift baseline
+## API Gateway Endpoints
 
-### `train`
-- module: `src.training.train`
-- input: final train/val/test split
-- output: model artifact, train metrics, test metrics, confusion matrix
+| Endpoint | Request | Response or effect |
+|---|---|---|
+| `GET /health` | none | `{status, service}` |
+| `GET /ready` | none | Checks model service and database |
+| `POST /predict` | image file | Stores one prediction and returns label, top-k, model version, latency |
+| `POST /predict-batch` | ZIP file | Stores one batch and many prediction rows |
+| `POST /feedback` | `prediction_id`, `ground_truth_label`, optional notes | Inserts or updates correction |
+| `POST /feedback/upload-csv` | CSV file | Validates against stored predictions and inserts correction rows |
+| `GET /recent-predictions` | limit/date filters | Prediction history and feedback summary |
+| `GET /recent-predictions/export` | limit/date filters | CSV template for correction upload |
+| `GET /metrics` | none | Prometheus metrics |
 
-### `evaluate`
-- module: `src.training.evaluate`
-- input: final test set + model + feedback DB
-- output: offline + live metrics JSON
+## Model Service Endpoints
 
-### `report`
-- module: `src.reporting.generate_report`
-- input: summaries + metrics
-- output: latest Markdown and HTML report
+| Endpoint | Behavior |
+|---|---|
+| `GET /health` | Basic liveness |
+| `GET /ready` | Fails if no model is loaded |
+| `POST /reload` | Reloads MLflow champion URI, falling back to `models/latest` |
+| `POST /predict` | Runs PyTorch inference and returns top-k predictions |
+| `GET /metrics` | Prometheus model metrics |
 
-## Airflow tasks
+## Prediction Sequence
 
-### `inspect_and_branch`
-Reads current model state, raw-data existence, offline metrics, live feedback metrics, and feedback count.
+```mermaid
+sequenceDiagram
+  participant API as API /predict
+  participant Client as ModelServiceClient
+  participant MS as Model service
+  participant Store as FeedbackStore
+  participant DB as Postgres
 
-### `run_dvc_pipeline`
-Runs `dvc repro report`.
+  API->>Client: predict(filename, bytes, content_type)
+  Client->>MS: POST /predict
+  MS-->>Client: prediction payload
+  API->>Store: create_batch()
+  Store->>DB: INSERT prediction_batches
+  API->>Store: create_prediction()
+  Store->>DB: INSERT predictions
+  API-->>API: PredictionResponse
+```
 
-### `reload_model_service`
-Calls `POST /reload` on the model service.
+## CSV Feedback Validation
 
-### `send_report_email`
-Reads the generated report and sends it through SMTP when enabled.
+```mermaid
+flowchart TD
+  Upload[CSV upload] --> Header{Columns match template?}
+  Header -->|No| Reject[Return validation errors]
+  Header -->|Yes| Rows[Validate rows]
+  Rows --> Exists{Prediction id exists?}
+  Exists -->|No| Reject
+  Exists -->|Yes| Match{Stored columns match?}
+  Match -->|No| Reject
+  Match -->|Yes| Label{Corrected label allowed and different?}
+  Label -->|No| Reject
+  Label -->|Yes| Insert[Insert feedback_uploads and feedback_corrections]
+```
 
-## REST endpoints
+## Artifact Snapshot Keys
 
-### API Gateway
-- `GET /health`
-- `GET /ready`
-- `POST /predict`
-- `POST /feedback`
-- `GET /recent-predictions`
+| Key | Producer | Local file kept |
+|---|---|---|
+| `raw_summary` | `fetch_raw` | No |
+| `processed_v1_summary` | `preprocess_v1` | No |
+| `processed_final_summary` | `preprocess_final` | No |
+| `drift_baseline` | `preprocess_final` | Yes |
+| `feedback_training_summary` | feedback materializer | No |
+| `train_metrics` | `train` | No |
+| `validation_metrics` | `train` | No |
+| `classification_report` | `train` | No |
+| `pipeline_runtime_summary` | `train` and `report` | No |
+| `test_metrics` | `evaluate` | No |
+| `live_metrics` | `evaluate` and runtime report | No |
+| `registry_status` | registry step | No |
 
-### Model Service
-- `GET /health`
-- `GET /ready`
-- `POST /reload`
-- `POST /predict`
+`src/reporting/generate_report.py` writes DVC-owned pipeline reports under `artifacts/reports/`. `src/reporting/generate_runtime_report.py` writes Airflow-owned email reports under `artifacts/runtime/`, so registry-time reporting does not mutate DVC outputs after `dvc.lock` records their hashes. The runtime report uses the training-and-monitoring report sections and omits metric rows whose values are unavailable instead of printing `n/a`.
 
-## Observability
+## Database Tables
 
-### Prometheus metrics
-- API request counts and latencies
-- model latencies and readiness
-- drift z-score
-- pipeline offline accuracy
-- live accuracy
-- raw images by class
-- training duration
-- Postgres-backed application log counts
+```mermaid
+flowchart TB
+  B[prediction_batches] --> P[predictions]
+  P --> C[feedback_corrections]
+  U[feedback_uploads] --> C
+  A[pipeline_artifact_snapshots] --> V[latest_pipeline_artifact_snapshots view]
+  S[control_plane_state] --> Airflow[Airflow DAG]
+  L[service_logs] --> Observability[Pipeline exporter and log queries]
+```
 
-### Logs
-- application/service logs are stored in Postgres table `service_logs`
-- Airflow task logs remain under `airflow/logs/**/*.log` and are scraped by Loki
+## MLflow Registry Promotion
+
+```mermaid
+flowchart TD
+  Metrics[Load comparison metric] --> Register[Register runs:/.../local_export]
+  Register --> Validate{Passes configured thresholds?}
+  Validate -->|No| Reject[Store rejected_validation registry_status]
+  Validate -->|Yes| Current{Existing champion?}
+  Current -->|No| Promote[Set champion alias]
+  Current -->|Yes| Compare{Candidate metric better?}
+  Compare -->|Yes| Promote
+  Compare -->|No| Keep[Keep current champion]
+  Promote --> Status[Store registry_status]
+  Reject --> Status
+  Keep --> Status
+```
+
+The Airflow DAG stores `dvc.lock` and `provenance.json` after `dvc push`, then logs them to MLflow. `provenance.json` includes the DVC lock hash, Airflow run id, MLflow run id, feedback snapshot information, and optional deployment metadata sourced from `DEPLOYMENT_GIT_COMMIT_SHA`, `APP_VERSION`, `CONTAINER_IMAGE`, and `CI_RUN_ID`.

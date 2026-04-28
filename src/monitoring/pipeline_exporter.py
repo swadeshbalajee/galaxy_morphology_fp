@@ -27,7 +27,9 @@ def metrics():
     g_test_macro_f1 = Gauge('galaxy_pipeline_test_macro_f1', 'Latest offline test macro f1.', registry=registry)
     g_live_accuracy = Gauge('galaxy_live_feedback_accuracy', 'Latest live-feedback accuracy.', registry=registry)
     g_live_macro_f1 = Gauge('galaxy_live_feedback_macro_f1', 'Latest live-feedback macro f1.', registry=registry)
-    g_feedback_count = Gauge('galaxy_live_feedback_count', 'Total live feedback rows.', registry=registry)
+    g_feedback_count = Gauge('galaxy_live_feedback_count', 'Latest-model predictions with received feedback.', registry=registry)
+    g_live_prediction_count = Gauge('galaxy_live_prediction_count', 'Latest-model predictions used for live accuracy.', registry=registry)
+    g_assumed_correct_count = Gauge('galaxy_live_assumed_correct_count', 'Latest-model predictions assumed correct because no correction feedback was received.', registry=registry)
     g_train_duration = Gauge('galaxy_pipeline_train_duration_seconds', 'Latest train duration.', registry=registry)
     g_raw_count = Gauge('galaxy_raw_images_total', 'Raw materialized images by class.', ['label'], registry=registry)
     g_service_logs = Gauge(
@@ -53,6 +55,8 @@ def metrics():
     if isinstance(live_metrics.get('macro_f1'), (int, float)):
         g_live_macro_f1.set(float(live_metrics['macro_f1']))
     g_feedback_count.set(float(live_metrics.get('feedback_count', 0) or 0))
+    g_live_prediction_count.set(float(live_metrics.get('prediction_count', 0) or 0))
+    g_assumed_correct_count.set(float(live_metrics.get('assumed_correct_count', 0) or 0))
     if isinstance(runtime_summary.get('train_duration_seconds'), (int, float)):
         g_train_duration.set(float(runtime_summary['train_duration_seconds']))
 

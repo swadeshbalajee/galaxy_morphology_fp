@@ -82,9 +82,22 @@ CREATE TABLE IF NOT EXISTS feedback_corrections (
     prediction_created_at TIMESTAMPTZ NOT NULL,
     notes TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_feedback_corrections_prediction UNIQUE (prediction_id),
-    CONSTRAINT chk_feedback_corrections_diff CHECK (predicted_label <> corrected_label)
+    CONSTRAINT uq_feedback_corrections_prediction UNIQUE (prediction_id)
 );
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_feedback_corrections_diff'
+          AND conrelid = 'feedback_corrections'::regclass
+    ) THEN
+        ALTER TABLE feedback_corrections
+            ADD CONSTRAINT chk_feedback_corrections_diff
+            CHECK (predicted_label <> corrected_label) NOT VALID;
+    END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_feedback_corrections_created_at ON feedback_corrections (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_feedback_corrections_prediction_created_at ON feedback_corrections (prediction_created_at DESC);

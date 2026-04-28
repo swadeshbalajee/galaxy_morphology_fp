@@ -1,50 +1,139 @@
-
 # High-Level Design
 
-## Objective
+## Goal
 
-Build a local full-stack AI application for galaxy morphology classification with a real MLOps control loop.
+Build a local, demonstrable MLOps platform for galaxy morphology classification that supports training, serving, feedback, retraining decisions, reporting, and monitoring.
 
-## Why DVC + Airflow together?
+## Logical View
 
-Using only Airflow would make the operational scheduler also responsible for ML artifact lineage.
-Using only DVC would make reproducibility strong, but runtime control weak.
+```mermaid
+flowchart TB
+  Data[Data subsystem] --> ML[ML subsystem]
+  ML --> Registry[Registry subsystem]
+  Registry --> Serving[Serving subsystem]
+  Serving --> Feedback[Feedback subsystem]
+  Feedback --> Control[Control subsystem]
+  Control --> ML
+  Serving --> Observability[Observability subsystem]
+  ML --> Observability
+  Control --> Reporting[Reporting subsystem]
+```
 
-So the system is intentionally split:
+## Design Decisions
 
-- **DVC** for build reproducibility
-- **Airflow** for control-plane logic
+| Decision | Rationale |
+|---|---|
+| DVC for ML stages | Gives deterministic dependencies, outputs, and rerun behavior |
+| Airflow for control plane | Handles scheduled checks, branching, registry, reload, and email |
+| Postgres for state | Keeps predictions, feedback, service logs, control state, and artifact summaries durable |
+| MLflow registry alias | Lets serving use `models:/galaxy_morphology_classifier@champion` |
+| API gateway in front of model service | Keeps UI decoupled from model loading and storage |
+| Prometheus plus Loki | Separates numeric metrics from logs while Grafana visualizes both |
 
-## Main modules
+## Data Lifecycle
 
-### Data acquisition
-Downloads Galaxy Zoo metadata and image archive, then materializes only the configured subset.
+```mermaid
+stateDiagram-v2
+  [*] --> Downloaded
+  Downloaded --> RawSubset: threshold label assignment
+  RawSubset --> ProcessedV1: RGB resize to v1 size
+  ProcessedV1 --> TrainingReady: train/val/test split
+  TrainingReady --> TrainedModel: train
+  TrainedModel --> EvaluatedModel: evaluate
+  EvaluatedModel --> Reported: report
+  Reported --> [*]
+```
 
-### Preprocess v1
-Creates a first normalized processed dataset.
+## Inference Lifecycle
 
-### Preprocess final
-Creates the final training split and baseline drift statistics.
+```mermaid
+stateDiagram-v2
+  [*] --> Uploaded
+  Uploaded --> Validated
+  Validated --> Predicted
+  Predicted --> Persisted
+  Persisted --> Displayed
+  Displayed --> Corrected: user says prediction is wrong
+  Displayed --> [*]: no correction
+  Corrected --> FeedbackStored
+  FeedbackStored --> [*]
+```
 
-### Training
-Fine-tunes a classifier and stores metrics, model artifacts, and confusion outputs.
+## Control-Plane Decision Logic
 
-### Evaluation
-Computes offline test metrics and live feedback metrics.
+The DAG schedule is read from `continuous_improvement.monitor_schedule` and defaults to `30 12 * * *`; `catchup` is disabled.
 
-### Reporting
-Creates Markdown and HTML reports used by the demo and email step.
+```mermaid
+flowchart TD
+  Start[Scheduled or manual DAG run] --> Inspect[Inspect runtime state]
+  Inspect --> Raw{Raw data exists?}
+  Raw -->|No| Run[Run DVC report pipeline]
+  Raw -->|Yes| Model{Model export exists?}
+  Model -->|No| Run
+  Model -->|Yes| Metrics{Metrics below thresholds?}
+  Metrics -->|Yes| Run
+  Metrics -->|No| Feedback{New feedback threshold reached?}
+  Feedback -->|Yes| Run
+  Feedback -->|No| Config{Pipeline config changed?}
+  Config -->|Yes| Run
+  Config -->|No| Skip[Skip retraining]
+  Run --> Push[Push DVC artifacts]
+  Push --> Provenance[Save and log DVC provenance]
+  Provenance --> Register[Register candidate in MLflow]
+  Register --> Validate{Candidate passes thresholds?}
+  Validate -->|No| Reject[Persist rejection status]
+  Validate -->|Yes| Promote[Promote if candidate beats champion]
+  Promote --> Reload[Reload model service]
+  Reject --> RuntimeReport[Generate runtime report]
+  Reload --> RuntimeReport[Generate runtime report]
+  Skip --> RuntimeReport
+  RuntimeReport --> Email[Send runtime report]
+```
 
-### Continuous improvement
-Airflow monitors current metrics and new feedback volume and retriggers the DVC pipeline only when needed.
+## Deployment View
 
-## Justification
+```mermaid
+flowchart LR
+  subgraph Compose["Docker Compose"]
+    PG[postgres]
+    Redis[redis]
+    Airflow[airflow-api-server/scheduler/worker/triggerer]
+    Trainer[trainer]
+    Exporter[pipeline-exporter]
+    Model[model-service]
+    API[api]
+    UI[frontend]
+    MLflow[mlflow]
+    Prom[prometheus]
+    Alert[alertmanager]
+    Loki[loki]
+    Promtail[promtail]
+    Grafana[grafana]
+    Adminer[adminer]
+  end
 
-This design demonstrates:
+  UI --> API --> Model
+  Model --> MLflow
+  API --> PG
+  Airflow --> Trainer
+  Airflow --> Redis
+  Trainer --> PG
+  Trainer --> MLflow
+  Exporter --> PG
+  Prom --> Alert
+  Promtail --> Loki
+  Grafana --> Prom
+  Grafana --> Loki
+  Adminer --> PG
+```
 
-- reproducibility
-- modularity
-- loose coupling
-- observability
-- a realistic retraining loop
-- a clear distinction between build and control responsibilities
+## Key Quality Attributes
+
+| Attribute | Design support |
+|---|---|
+| Reproducibility | DVC stages and config-driven paths |
+| Traceability | MLflow runs, registry status, artifact snapshots |
+| Operability | Airflow branching, health endpoints, reload endpoint |
+| Observability | Metrics, logs, dashboards, alert routing |
+| Extensibility | Service boundaries and config-driven class/model settings |
+| Demonstrability | Streamlit UI, Adminer, generated report, proof folder |

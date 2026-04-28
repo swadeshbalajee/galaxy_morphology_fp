@@ -12,6 +12,7 @@ paths:
   feedback_training_dir: data/feedback/training_feedback
   artifacts_dir: artifacts
   reports_dir: artifacts/reports
+  runtime_dir: artifacts/runtime
   models_dir: models/latest
   logs_dir: logs
   predictions_db_path: artifacts/predictions.db
@@ -30,6 +31,8 @@ paths:
   classification_report_path: artifacts/classification_report.json
   latest_report_md_path: artifacts/reports/latest_report.md
   latest_report_html_path: artifacts/reports/latest_report.html
+  latest_runtime_report_md_path: artifacts/runtime/latest_runtime_report.md
+  latest_runtime_report_html_path: artifacts/runtime/latest_runtime_report.html
   pipeline_runtime_summary_path: artifacts/pipeline_runtime_summary.json
   registry_status_path: artifacts/model_registry_status.json
 
@@ -38,6 +41,14 @@ runtime:
   project_root_env: PROJECT_ROOT
   training_python: /opt/venvs/training/bin/python
   max_upload_mb: 10
+  max_zip_upload_mb: 50
+
+orchestration:
+  airflow_retries: 1
+  airflow_retry_delay_minutes: 5
+
+dvc:
+  push_on_success: true
 
 data:
   layout: project5
@@ -91,6 +102,7 @@ continuous_improvement:
   drift_zscore_alert_threshold: 3.0
   min_new_feedback_samples: 5
   min_total_feedback_samples: 10
+  min_live_prediction_samples: 10
   promote_only_if_better_than_current: true
   monitor_schedule: "30 12 * * *"
 

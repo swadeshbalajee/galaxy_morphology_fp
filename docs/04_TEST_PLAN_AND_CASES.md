@@ -1,28 +1,104 @@
-
 # Test Plan and Test Cases
 
-## Objectives
+## Test Strategy
 
-Verify that the project is correct, reproducible, observable, and demo-ready.
+```mermaid
+flowchart TB
+  Unit[Unit tests] --> Contract[API and schema contracts]
+  Contract --> Integration[Service health integration tests]
+  Integration --> Pipeline[DVC and Airflow dry run]
+  Pipeline --> Manual[Manual UI and proof checks]
+```
 
-## Functional tests
+## Automated Tests
 
-1. DVC DAG renders successfully.
-2. `dvc repro report` completes successfully.
-3. Airflow DAG triggers and branches correctly.
-4. Frontend can upload an image and receive a prediction.
-5. Feedback submission stores rows in SQLite.
-6. Model service reload endpoint works after retraining.
+| Test file | Coverage |
+|---|---|
+| `tests/unit/test_schemas.py` | Pydantic request and response models |
+| `tests/unit/test_preprocess.py` | Split-count behavior and validation result structure |
+| `tests/unit/test_metrics.py` | Drift baseline behavior |
+| `tests/unit/test_live_feedback_metrics.py` | Live feedback metric calculation |
+| `tests/unit/test_config_contracts.py` | Config contract expectations |
+| `tests/integration/test_health_contracts.py` | API `/health` contract |
 
-## Observability tests
+## Functional Test Cases
 
-1. Prometheus can scrape API, model service, and pipeline exporter.
-2. Grafana dashboard loads.
-3. Loki receives app logs and Airflow logs.
+| ID | Case | Expected result |
+|---|---|---|
+| F-01 | Run `dvc dag` | DVC graph renders without errors |
+| F-02 | Run `dvc repro report` | Raw, processed, model, metrics, and reports are generated |
+| F-03 | Open Streamlit frontend | UI loads at `http://localhost:8501` |
+| F-04 | Upload one image | Prediction stored in Postgres and shown in UI |
+| F-05 | Upload ZIP batch | Batch row and prediction rows are stored |
+| F-06 | Export recent predictions CSV | CSV includes required correction columns |
+| F-07 | Upload valid correction CSV | Feedback upload and correction rows are stored |
+| F-08 | Upload invalid correction CSV | API returns row-level validation errors |
+| F-09 | Trigger model reload | Model service reports ready after reload |
+| F-10 | Generate report | Latest Markdown and HTML reports exist |
 
-## Continuous-improvement tests
+## Airflow Test Cases
 
-1. With metrics above threshold, Airflow skips retraining.
-2. With metrics below threshold, Airflow runs DVC.
-3. With sufficient new feedback, Airflow retriggers the DVC pipeline.
-4. Latest report is generated and emailed when SMTP is enabled.
+```mermaid
+flowchart TD
+  Start[Trigger DAG] --> Inspect[inspect_and_branch]
+  Inspect --> Missing{Missing data/model?}
+  Missing -->|Yes| Run[Expect DVC pipeline branch]
+  Missing -->|No| Feedback{Enough new feedback?}
+  Feedback -->|Yes| Run
+  Feedback -->|No| Metrics{Metrics degraded?}
+  Metrics -->|Yes| Run
+  Metrics -->|No| Skip[Expect skip branch]
+  Run --> Register[Register candidate]
+  Register --> Validate{Validate candidate}
+  Validate -->|Pass| Promote[Promote candidate]
+  Validate -->|Fail| Reject[Persist rejection]
+  Promote --> Reload[Reload model service]
+  Reject --> Email
+  Skip --> Email[Send latest report]
+  Reload --> Email
+```
+
+| ID | Case | Expected result |
+|---|---|---|
+| A-01 | Raw dataset missing | DAG branches to `run_dvc_pipeline` |
+| A-02 | Model missing | DAG branches to `run_dvc_pipeline` |
+| A-03 | New feedback reaches threshold | DAG materializes feedback and runs DVC |
+| A-04 | Metrics below threshold | DAG runs DVC |
+| A-05 | Healthy state | DAG branches to `skip_retraining` and still emails report |
+| A-06 | Registry step completes | Candidate model is registered and registry status stored |
+| A-07 | Candidate fails validation | DAG stores rejected validation status and emails runtime report without reloading model service |
+| A-08 | Candidate passes validation but does not beat champion | DAG keeps current champion and emails the final registry decision |
+| A-09 | Deployment metadata supplied | MLflow run has `deployment.*` tags and provenance JSON contains deployment fields |
+
+## Observability Test Cases
+
+| ID | Case | Expected result |
+|---|---|---|
+| O-01 | Visit API `/metrics` | API metrics are exposed |
+| O-02 | Visit model service `/metrics` | Model metrics are exposed |
+| O-03 | Visit pipeline exporter `/metrics` | Pipeline metrics are exposed |
+| O-04 | Open Prometheus targets | API, model service, and exporter targets are up |
+| O-05 | Open Grafana | Dashboard datasource provisioning works |
+| O-06 | Open Loki ready endpoint | Loki is ready and Promtail can push logs |
+| O-07 | Fire alert condition | Alertmanager sends email through configured SMTP |
+
+## Manual Proof Checklist
+
+```mermaid
+journey
+  title Final proof capture
+  section Deploy
+    Start docker compose: 5: User
+    Check service health: 5: User
+  section Exercise app
+    Upload image: 5: User
+    Submit feedback: 4: User
+    Export CSV: 4: User
+  section Verify ops
+    Trigger Airflow DAG: 5: User
+    Inspect MLflow registry: 4: User
+    Open dashboards: 4: User
+    Capture email proof: 4: User
+```
+
+Save proof screenshots in `image/proof/`.

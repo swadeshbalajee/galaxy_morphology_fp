@@ -26,6 +26,10 @@ x-airflow-common: &airflow-common
     DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy_app
     MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
     MLFLOW_TRACKING_URI: http://mlflow:5000
+    DEPLOYMENT_GIT_COMMIT_SHA: ${DEPLOYMENT_GIT_COMMIT_SHA:-}
+    APP_VERSION: ${APP_VERSION:-}
+    CONTAINER_IMAGE: ${CONTAINER_IMAGE:-}
+    CI_RUN_ID: ${CI_RUN_ID:-}
     _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
     _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
     _PIP_ADDITIONAL_REQUIREMENTS: ''
@@ -165,6 +169,10 @@ services:
       DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy_app
       MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
       MLFLOW_TRACKING_URI: http://mlflow:5000
+      DEPLOYMENT_GIT_COMMIT_SHA: ${DEPLOYMENT_GIT_COMMIT_SHA:-}
+      APP_VERSION: ${APP_VERSION:-}
+      CONTAINER_IMAGE: ${CONTAINER_IMAGE:-}
+      CI_RUN_ID: ${CI_RUN_ID:-}
     working_dir: /app
     volumes:
       - ./:/app
@@ -302,11 +310,37 @@ services:
   alertmanager:
     image: prom/alertmanager:v0.27.0
     env_file: [.env]
+    entrypoint:
+      - /bin/sh
+      - -c
     command:
-      - "--config.file=/etc/alertmanager/alertmanager.yml"
-      - "--storage.path=/alertmanager"
+      - |
+        set -eu
+        cat > /tmp/alertmanager.yml <<EOF
+        global:
+          smtp_smarthost: "$${MAILTRAP_SMTP_HOST}:$${MAILTRAP_SMTP_PORT}"
+          smtp_from: "$${MAILTRAP_FROM_EMAIL}"
+          smtp_auth_username: "$${MAILTRAP_SMTP_USERNAME}"
+          smtp_auth_password: "$${MAILTRAP_SMTP_PASSWORD}"
+          smtp_require_tls: false
+
+        route:
+          receiver: mailtrap-email
+          group_by: ['alertname', 'severity']
+          group_wait: 10s
+          group_interval: 1m
+          repeat_interval: 2h
+
+        receivers:
+          - name: mailtrap-email
+            email_configs:
+              - to: "$${ALERT_EMAIL_TO}"
+                send_resolved: true
+                headers:
+                  subject: '[Galaxy MLOps] {{ .CommonLabels.severity | toUpper }} {{ .CommonLabels.alertname }}'
+        EOF
+        exec /bin/alertmanager --config.file=/tmp/alertmanager.yml --storage.path=/alertmanager
     volumes:
-      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - alertmanager-data:/alertmanager
     ports: ["9093:9093"]
     restart: unless-stopped

@@ -1,343 +1,249 @@
-# Galaxy Morphology MLOps Project Report
+# Galaxy Morphology MLOps
 
-## Cover
+End-to-end galaxy morphology classification with DVC, Airflow, FastAPI, Streamlit, MLflow, Postgres, Prometheus, Grafana, Loki, and Alertmanager.
 
-- Project: `galaxy-mlops-v2`
-- Repository: `galaxy_morphology_fp`
-- Stack: DVC + Airflow + FastAPI + Streamlit + MLflow + Postgres + Prometheus + Grafana + Loki
-- Report owner: `<Add name>`
-- Submission date: `<Add date>`
+The project classifies galaxy images into `elliptical`, `spiral`, `lenticular`, `irregular`, and `merger`. It includes reproducible data preparation, model training, registry promotion, online inference, feedback capture, feedback-aware retraining, generated reports, and operational monitoring.
 
-## Abstract
+`report.pdf` is included at the repository root as the submitted project report. The Markdown docs in `docs/` describe the current codebase and are easier to inspect, diff, and maintain.
 
-This project implements an end-to-end galaxy morphology classification platform with a full MLOps stack. The system supports dataset preparation, model training, evaluation, registry promotion, batch and single-image inference, feedback capture, retraining decisions, observability, alerting, and operational reporting. The final architecture separates the ML artifact pipeline from the operational control plane: DVC manages reproducible ML stages, while Airflow orchestrates runtime decisions such as retraining, report generation, service reloads, and email delivery.
+## System Map
 
-## Problem Statement
-
-The goal is to classify galaxy images into:
-
-- `elliptical`
-- `spiral`
-- `lenticular`
-- `irregular`
-- `merger`
-
-The system is expected to:
-
-- train and evaluate a reproducible image classifier
-- expose prediction APIs and a usable frontend
-- capture user corrections for continuous improvement
-- store operational and application state in Postgres
-- monitor model and service behavior with observability tooling
-- support demonstrable deployment with proof artifacts
-
-## Objectives Delivered
-
-- Reproducible data and model pipeline with DVC
-- Airflow-based control plane for retraining and reporting
-- Postgres-backed application state and pipeline artifact summaries
-- MLflow experiment tracking and model registry promotion
-- Streamlit frontend for prediction, batch upload, and feedback
-- FastAPI API and model-service deployment
-- Prometheus, Grafana, Loki, and Alertmanager integration
-- SMTP-based email delivery for alerts and Airflow report email
-
-## Final System Architecture
-
-### High-Level Flow
-
-`Frontend -> API -> Model Service -> Postgres`
-
-`DVC -> Airflow Control Plane -> Train / Evaluate / Report -> MLflow + Monitoring Stack`
-
-### Major Components
-
-- `frontend/`: Streamlit user interface
-- `api/`: FastAPI gateway for inference, history, and feedback
-- `model_service/`: model-serving service
-- `src/data/`: ingestion and preprocessing stages
-- `src/training/`: training and evaluation logic
-- `src/reporting/`: report generation
-- `src/registry/`: MLflow model registration and champion promotion
-- `airflow/dags/`: control-plane DAGs
-- `monitoring/`: Prometheus, Grafana, Loki, Promtail, Alertmanager config
-- `postgres/`: database initialization scripts
-
-## Database Design Summary
-
-### Operational Databases
-
-- `airflow`
-- `galaxy_app`
-- `mlflow`
-
-### Application Tables
-
-- `prediction_batches`
-- `predictions`
-- `feedback_uploads`
-- `feedback_corrections`
-- `control_plane_state`
-- `pipeline_artifact_snapshots`
-
-### Artifact Storage Design
-
-Most pipeline summaries and metric snapshots now live in Postgres instead of local JSON files. The main table is:
-
-- `pipeline_artifact_snapshots`
-
-Design characteristics:
-
-- stores summary and metric payloads as `JSONB`
-- partitioned by `recorded_date`
-- queryable directly with SQL
-- latest snapshot accessible through the view:
-  - `latest_pipeline_artifact_snapshots`
-
-Artifacts moved into Postgres include:
-
-- raw ingestion summary
-- preprocess v1 summary
-- preprocess final summary
-- feedback training summary
-- train metrics
-- validation metrics
-- test metrics
-- live metrics
-- classification report
-- pipeline runtime summary
-- registry status
-
-Artifacts intentionally kept as files:
-
-- processed datasets
-- trained model export
-- report files
-- confusion matrix CSV
-- feedback manifest CSV
-- drift baseline file
-
-## Pipeline Design
-
-### DVC Stages
-
-1. `fetch_raw`
-2. `preprocess_v1`
-3. `preprocess_final`
-4. `train`
-5. `evaluate`
-6. `report`
-
-### Airflow Control Plane
-
-The Airflow DAG:
-
-- checks runtime state
-- inspects feedback growth
-- decides whether retraining is required
-- runs the DVC report pipeline when necessary
-- registers the best model in MLflow
-- reloads the serving model
-- sends the latest report through the configured SMTP connection
-
-## Deployment Topology
-
-The project is deployed with Docker Compose and includes:
-
-- `postgres`
-- `redis`
-- `airflow-init`
-- `airflow-api-server`
-- `airflow-scheduler`
-- `airflow-dag-processor`
-- `airflow-worker`
-- `airflow-triggerer`
-- `trainer`
-- `pipeline-exporter`
-- `model-service`
-- `api`
-- `frontend`
-- `mlflow`
-- `prometheus`
-- `alertmanager`
-- `loki`
-- `promtail`
-- `grafana`
-- `adminer`
-
-## Runtime Endpoints
-
-- Frontend: `http://localhost:8501`
-- API: `http://localhost:8000/docs`
-- Model Service: `http://localhost:8001/docs`
-- Airflow: `http://localhost:8080`
-- MLflow: `http://localhost:5000`
-- Prometheus: `http://localhost:9090`
-- Alertmanager: `http://localhost:9093`
-- Grafana: `http://localhost:3000`
-- Adminer: `http://localhost:8081`
-
-## SQL Evidence Queries
-
-### Latest Artifact Snapshots
-
-```sql
-SELECT artifact_key, stage_name, recorded_at
-FROM latest_pipeline_artifact_snapshots
-ORDER BY artifact_key;
+```mermaid
+flowchart LR
+  User[User] --> Frontend[Streamlit frontend]
+  Frontend --> API[FastAPI API gateway]
+  API --> Model[FastAPI model service]
+  Model --> Registry[MLflow model registry]
+  API --> PG[(Postgres galaxy_app)]
+  Model --> PG
+  Airflow[Airflow control plane] --> DVC[DVC pipeline]
+  DVC --> MLflow[MLflow tracking]
+  DVC --> Artifacts[(Postgres artifact snapshots)]
+  Airflow --> Registry
+  Airflow --> Model
+  API --> Prom[Prometheus]
+  Model --> Prom
+  Exporter[Pipeline exporter] --> Prom
+  Prom --> Grafana[Grafana]
+  Logs[Service and Airflow logs] --> Loki[Loki]
+  Loki --> Grafana
+  Prom --> Alertmanager[Alertmanager email alerts]
 ```
 
-### Historical Train Metrics by Date
+## What Is Implemented
 
-```sql
-SELECT recorded_date, recorded_at, payload
-FROM pipeline_artifact_snapshots
-WHERE artifact_key = 'train_metrics'
-ORDER BY recorded_at DESC;
+| Area | Implementation |
+|---|---|
+| Reproducible ML pipeline | `dvc.yaml`, `src/data/*`, `src/training/*`, `src/reporting/generate_report.py` |
+| Runtime orchestration | `airflow/dags/galaxy_pipeline.py` |
+| Online serving | `api/app/main.py`, `model_service/app/main.py` |
+| User interface | `frontend/app.py`, `frontend/pages/1_Pipeline_Console.py` |
+| Feedback loop | Postgres-backed predictions, correction CSV upload, feedback materialization |
+| Model registry | `src/registry/register_best_model.py`, MLflow champion alias |
+| Monitoring | Prometheus metrics, Grafana dashboard, Loki logs, Alertmanager email |
+| Durable metadata | Postgres tables and JSONB pipeline artifact snapshots |
+
+## Repository Layout
+
+```text
+airflow/             Airflow image and DAGs
+api/                 FastAPI API gateway
+docs/                Architecture, design, testing, user, and deployment docs
+frontend/            Streamlit application
+model_service/       FastAPI model-serving service
+monitoring/          Prometheus, Grafana, Loki, Promtail, Alertmanager config
+postgres/            Database initialization scripts
+requirements/        Service-specific Python dependencies
+scripts/             Operational helper scripts
+src/                 Data, feature, training, registry, monitoring, reporting code
+tests/               Unit and integration tests
 ```
 
-### Recent Feedback Corrections
+## DVC Pipeline
 
-```sql
-SELECT prediction_id, predicted_label, corrected_label, created_at
-FROM feedback_corrections
-ORDER BY created_at DESC
-LIMIT 20;
+```mermaid
+flowchart LR
+  A[fetch_raw] --> B[preprocess_v1]
+  B --> C[preprocess_final]
+  C --> D[train]
+  D --> E[evaluate]
+  E --> F[report]
+  C --> G[drift_baseline.json]
+  D --> H[models/latest]
+  D --> I[MLflow run]
+  F --> J[latest_report.md and .html]
 ```
 
-## Deployment Procedure
+Run the full pipeline inside the trainer container:
 
-### Environment Preparation
+```bash
+docker compose exec trainer dvc repro report
+```
 
-1. Configure `.env`
-2. Confirm Mailtrap SMTP values for Alertmanager
-3. Confirm Airflow SMTP connection for report email
+## Airflow Control Plane
 
-### Deploy
+```mermaid
+flowchart TD
+  Inspect[inspect_and_branch] -->|run needed| DVC[run_dvc_pipeline]
+  Inspect -->|healthy| Skip[skip_retraining]
+  DVC --> Push[push_dvc_artifacts]
+  Push --> Provenance[save_dvc_provenance]
+  Provenance --> Log[log_dvc_provenance_to_mlflow]
+  Log --> Register[register_candidate_model]
+  Register --> Validate[validate_candidate_model]
+  Validate -->|passed| Promote[promote_candidate_model]
+  Promote --> Reload[reload_model_service]
+  Validate -->|failed| RuntimeReport[generate_runtime_report]
+  Reload --> RuntimeReport
+  Skip --> RuntimeReport
+  RuntimeReport --> Email[send_report_email]
+  Email --> Finish[finish]
+```
+
+Airflow runs the DVC pipeline when raw data or model artifacts are missing, metrics degrade below configured thresholds, enough new feedback has arrived, or the pipeline configuration fingerprint changes. After a successful DVC run, Airflow pushes DVC artifacts to the configured remote when `dvc.push_on_success` is `true`, saves `dvc.lock` provenance under `artifacts/runtime/runs/<run_id>/`, logs `dvc.lock` and `provenance.json` to MLflow, registers a candidate, validates accuracy and macro F1 thresholds, promotes only passing candidates, and reloads serving only after promotion. The provenance JSON also records deployment metadata from `DEPLOYMENT_GIT_COMMIT_SHA`, `APP_VERSION`, `CONTAINER_IMAGE`, and `CI_RUN_ID` when those environment variables are supplied by CI/CD. DVC-owned reports stay under `artifacts/reports/`; Airflow email reports are generated separately under `artifacts/runtime/`.
+
+To reproduce a tracked run, check out the matching code version, download that run's `dvc.lock` artifact from MLflow, replace the local root `dvc.lock`, then pull the recorded artifacts:
+
+```bash
+dvc pull
+```
+
+## Application Flow
+
+```mermaid
+sequenceDiagram
+  actor U as User
+  participant UI as Streamlit
+  participant API as API Gateway
+  participant MS as Model Service
+  participant DB as Postgres
+  participant MF as MLflow Registry
+
+  U->>UI: Upload image or ZIP
+  UI->>API: POST /predict or /predict-batch
+  API->>MS: POST /predict
+  MS->>MF: Load champion model or local fallback
+  MS-->>API: Label, top-k scores, latency, drift z-score
+  API->>DB: Store batch and prediction rows
+  API-->>UI: Prediction response
+  U->>UI: Submit label correction
+  UI->>API: POST /feedback or /feedback/upload-csv
+  API->>DB: Store feedback correction
+```
+
+## Main Endpoints
+
+| Service | Endpoint | Purpose |
+|---|---|---|
+| API | `GET /health`, `GET /ready` | Liveness and readiness |
+| API | `POST /predict` | Single image prediction |
+| API | `POST /predict-batch` | ZIP batch prediction |
+| API | `POST /feedback` | Single prediction correction |
+| API | `POST /feedback/upload-csv` | Validated correction CSV upload |
+| API | `GET /recent-predictions` | Filtered prediction history |
+| API | `GET /recent-predictions/export` | CSV template export |
+| Model service | `POST /predict` | Direct model inference |
+| Model service | `POST /reload` | Reload champion/local model |
+
+## Local Deployment
+
+1. Copy and edit environment values.
+
+```bash
+cp .env.example .env
+```
+
+2. Start the stack.
 
 ```bash
 docker compose up -d --build
 ```
 
-### Validate
+3. Check services.
 
 ```bash
 docker compose ps
 ```
 
-## Reported Features
+## Runtime URLs
 
-### Inference and Feedback
+| Tool | URL |
+|---|---|
+| Frontend | http://localhost:8501 |
+| API docs | http://localhost:8000/docs |
+| Model service docs | http://localhost:8001/docs |
+| Airflow | http://localhost:8080 |
+| MLflow | http://localhost:5000 |
+| Prometheus | http://localhost:9090 |
+| Alertmanager | http://localhost:9093 |
+| Grafana | http://localhost:3000 |
+| Adminer | http://localhost:8081 |
 
-- single image prediction
-- ZIP batch prediction
-- recent prediction filtering
-- CSV template export
-- validated correction CSV upload
-- feedback storage in Postgres
+## Current Run Snapshot
 
-### Continuous Improvement
+The latest generated report in `artifacts/reports/latest_report.md` records:
 
-- feedback-aware retraining trigger
-- feedback materialization into training dataset
-- live metrics from accepted corrections
-- control-plane state stored in Postgres
+| Item | Value |
+|---|---|
+| Raw dataset | 500 images, 100 per class |
+| Final split | 70 train, 15 validation, 15 test per class |
+| Validation accuracy | 0.52 |
+| Validation macro F1 | 0.4976 |
+| Candidate model version | 10 |
+| Champion model version | 7 |
+| Registry decision | Candidate not promoted because it did not beat champion macro F1 0.5496 |
+| Feedback rows | 15 |
+| Training duration | 660.367 seconds, 5 epochs |
 
-### Monitoring and Alerting
+## Documentation
 
-- Prometheus service and pipeline metrics
-- Grafana dashboards
-- Loki log aggregation
-- Alertmanager email routing
-- Mailtrap SMTP integration
+| Document | Contents |
+|---|---|
+| `docs/00_REQUIREMENT_COVERAGE.md` | Requirement coverage matrix |
+| `docs/01_ARCHITECTURE.md` | System, data, serving, observability, and database architecture |
+| `docs/02_HLD.md` | High-level design and control-loop behavior |
+| `docs/03_LLD.md` | Low-level modules, endpoints, schemas, and artifacts |
+| `docs/04_TEST_PLAN_AND_CASES.md` | Test strategy and cases |
+| `docs/05_TEST_REPORT.md` | Current test report template and known verification points |
+| `docs/06_USER_MANUAL.md` | Non-technical usage guide |
+| `docs/07_DEPLOYMENT_RUNBOOK.md` | Deployment and operations runbook |
 
-## Proof of Deployment
+## Useful Commands
 
-Store screenshots inside [`image/proof`](<c:\Users\Swadesh B\Downloads\galaxy_morphology_fp\image\proof>).
+```bash
+# Run tests locally
+pytest
 
-### Proof 1: Docker Compose Running
+# Run DVC pipeline in trainer
+docker compose exec trainer dvc repro report
 
-Expected file: `image/proof/01-docker-compose-ps.png`
+# Push DVC artifacts to the configured remote
+docker compose exec trainer dvc push
 
-![Proof Placeholder - Docker Compose](image/proof/01-docker-compose-ps.png)
+# Trigger report generation only
+docker compose exec trainer python -m src.reporting.generate_report
 
-### Proof 2: Frontend Home / Prediction UI
+# Trigger runtime email report generation only
+docker compose exec trainer python -m src.reporting.generate_runtime_report
 
-Expected file: `image/proof/02-frontend-ui.png`
+# Register latest candidate model
+docker compose exec trainer python -m src.registry.register_best_model register-candidate
+docker compose exec trainer python -m src.registry.register_best_model promote-candidate
 
-![Proof Placeholder - Frontend UI](image/proof/02-frontend-ui.png)
+# Tail API logs
+docker compose logs -f api
+```
 
-### Proof 3: Airflow DAG View
+## Proof Artifacts
 
-Expected file: `image/proof/03-airflow-dag.png`
+Screenshots for final submission should be stored in `image/proof/`. Suggested evidence:
 
-![Proof Placeholder - Airflow DAG](image/proof/03-airflow-dag.png)
-
-### Proof 4: MLflow Experiment / Registry
-
-Expected file: `image/proof/04-mlflow.png`
-
-![Proof Placeholder - MLflow](image/proof/04-mlflow.png)
-
-### Proof 5: Prometheus Targets / Alerts
-
-Expected file: `image/proof/05-prometheus.png`
-
-![Proof Placeholder - Prometheus](image/proof/05-prometheus.png)
-
-### Proof 6: Grafana Dashboard
-
-Expected file: `image/proof/06-grafana-dashboard.png`
-
-![Proof Placeholder - Grafana Dashboard](image/proof/06-grafana-dashboard.png)
-
-### Proof 7: Adminer / SQL Evidence
-
-Expected file: `image/proof/07-adminer-sql.png`
-
-![Proof Placeholder - Adminer SQL](image/proof/07-adminer-sql.png)
-
-### Proof 8: Alert Email / Mailtrap
-
-Expected file: `image/proof/08-mailtrap-alert.png`
-
-![Proof Placeholder - Mailtrap Alert](image/proof/08-mailtrap-alert.png)
-
-### Proof 9: Latest Generated Report
-
-Expected file: `image/proof/09-latest-report.png`
-
-![Proof Placeholder - Latest Report](image/proof/09-latest-report.png)
-
-## Result Summary
-
-The project now demonstrates a full MLOps lifecycle:
-
-- reproducible training with DVC
-- operational orchestration with Airflow
-- durable application and pipeline metadata in Postgres
-- experiment tracking and registry promotion with MLflow
-- user-facing prediction and feedback workflows
-- monitoring, logs, dashboards, and alerts
-- deployable multi-service Docker stack
-
-## Limitations
-
-- reports still remain file-based by design
-- large binary datasets and trained model files remain on disk rather than in Postgres
-- proof images must still be captured manually after deployment
-
-## Final Submission Checklist
-
-- [ ] `.env` configured
-- [ ] `docker compose up -d --build` completed
-- [ ] frontend prediction tested
-- [ ] feedback upload tested
-- [ ] Airflow DAG triggered
-- [ ] MLflow registry checked
-- [ ] Prometheus verified
-- [ ] Grafana verified
-- [ ] Adminer SQL proof captured
-- [ ] Mailtrap alert proof captured
-- [ ] screenshots saved in `image/proof/`
-
+- Docker Compose services running
+- Streamlit prediction UI
+- Airflow DAG run
+- MLflow experiment and model registry
+- Prometheus targets or alerts
+- Grafana dashboard
+- Adminer SQL query over Postgres tables
+- Mailtrap or SMTP email proof
+- Latest generated report

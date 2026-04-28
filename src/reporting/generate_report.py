@@ -82,7 +82,10 @@ def generate_report() -> dict:
         f"- Decision reason: {registry_data.get('decision_reason')}",
         '',
         '## Continuous improvement metrics',
+        f"- Latest model version: {live_metrics.get('latest_model_version')}",
+        f"- Latest-model prediction count: {live_metrics.get('prediction_count')}",
         f"- Feedback count: {live_metrics.get('feedback_count')}",
+        f"- Assumed correct without correction feedback: {live_metrics.get('assumed_correct_count')}",
         f"- Live accuracy: {live_metrics.get('accuracy')}",
         f"- Live macro F1: {live_metrics.get('macro_f1')}",
         '',
@@ -101,13 +104,6 @@ def generate_report() -> dict:
           <li>Validation accuracy: {validation_metrics.get('accuracy')}</li>
           <li>Validation macro F1: {validation_metrics.get('macro_f1')}</li>
         </ul>
-        <h2>Offline metrics</h2>
-        <ul>
-          <li>Accuracy: {test_metrics.get('accuracy')}</li>
-          <li>Macro F1: {test_metrics.get('macro_f1')}</li>
-          <li>Precision macro: {test_metrics.get('precision_macro')}</li>
-          <li>Recall macro: {test_metrics.get('recall_macro')}</li>
-        </ul>
         <h2>Registry decision</h2>
         <ul>
           <li>Candidate version: {candidate.get('version')}</li>
@@ -121,7 +117,10 @@ def generate_report() -> dict:
         </ul>
         <h2>Continuous improvement</h2>
         <ul>
+          <li>Latest model version: {live_metrics.get('latest_model_version')}</li>
+          <li>Latest-model prediction count: {live_metrics.get('prediction_count')}</li>
           <li>Feedback count: {live_metrics.get('feedback_count')}</li>
+          <li>Assumed correct without correction feedback: {live_metrics.get('assumed_correct_count')}</li>
           <li>Live accuracy: {live_metrics.get('accuracy')}</li>
           <li>Live macro F1: {live_metrics.get('macro_f1')}</li>
         </ul>
