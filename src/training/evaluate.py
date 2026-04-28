@@ -2,18 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import mlflow.pytorch
-import torch
-import torch.nn as nn
 from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_support
-from torch.utils.data import DataLoader
-from torchvision import datasets
 
 from src.common.artifact_store import store_pipeline_artifact
 from src.common.config import get_config_value, load_config, resolve_path
 from src.common.logging_utils import configure_logging
 from src.common.postgres import get_db_connection, initialize_database
-from src.training.train import make_transforms
 
 LOGGER = configure_logging('evaluation')
 
@@ -53,6 +47,14 @@ def compute_live_feedback_metrics(rows: list[dict] | list[tuple]) -> dict:
 
 
 def evaluate_offline() -> dict:
+    import mlflow.pytorch
+    import torch
+    import torch.nn as nn
+    from torch.utils.data import DataLoader
+    from torchvision import datasets
+
+    from src.training.train import make_transforms
+
     config = load_config()
     model_dir = resolve_path(config, 'paths.models_dir')
     test_dir = resolve_path(config, 'paths.processed_final_dir') / 'test'

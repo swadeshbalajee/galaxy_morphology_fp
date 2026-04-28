@@ -85,6 +85,7 @@ def test_dvc_lock_sha256_and_provenance_keys(galaxy_pipeline, tmp_path, monkeypa
         'airflow_run_id',
         'timestamp',
         'mlflow_run_id',
+        'deployment',
         'feedback_snapshot_id',
         'feedback_snapshot_path',
         'candidate_model_version',
