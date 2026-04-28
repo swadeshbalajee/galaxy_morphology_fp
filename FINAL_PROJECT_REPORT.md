@@ -28,7 +28,6 @@ The system supports both model development and live operation. Users can upload 
 14. Acceptance Criteria and Final Test Report
 15. HLD, LLD, and User Manual
 16. Conclusion
-17. Generated Artifacts Used
 
 ## 1. Project Overview
 
