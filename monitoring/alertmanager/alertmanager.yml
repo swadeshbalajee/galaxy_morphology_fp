@@ -3,7 +3,7 @@ global:
   smtp_from: '${MAILTRAP_FROM_EMAIL}'
   smtp_auth_username: '${MAILTRAP_SMTP_USERNAME}'
   smtp_auth_password: '${MAILTRAP_SMTP_PASSWORD}'
-  smtp_require_tls: false
+  smtp_require_tls: true
 
 route:
   receiver: mailtrap-email

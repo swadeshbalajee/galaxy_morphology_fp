@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 import requests
 import streamlit as st
@@ -53,6 +54,36 @@ for column, (name, url) in zip(columns, services.items()):
 
 st.divider()
 st.subheader('Tool Links')
+AIRFLOW_URL = re.sub(
+    r"(?<=http://)[^:/\s]+(?=:\d+)",
+    "localhost",
+    AIRFLOW_URL
+)
+MLFLOW_URL = re.sub(
+    r"(?<=http://)[^:/\s]+(?=:\d+)",
+    "localhost",
+    MLFLOW_URL
+)
+PROMETHEUS_URL = re.sub(
+    r"(?<=http://)[^:/\s]+(?=:\d+)",
+    "localhost",
+    PROMETHEUS_URL
+)
+GRAFANA_URL = re.sub(
+    r"(?<=http://)[^:/\s]+(?=:\d+)",
+    "localhost",
+    GRAFANA_URL
+)
+LOKI_URL = re.sub(
+    r"(?<=http://)[^:/\s]+(?=:\d+)",
+    "localhost",
+    LOKI_URL
+)
+API_URL = re.sub(
+    r"(?<=http://)[^:/\s]+(?=:\d+)",
+    "localhost",
+    API_URL
+)
 st.markdown(f'- [Airflow DAGs]({AIRFLOW_URL})')
 st.markdown(f'- [MLflow Experiments]({MLFLOW_URL})')
 st.markdown(f'- [Prometheus Targets]({PROMETHEUS_URL}/targets)')
