@@ -237,7 +237,7 @@ services:
     volumes:
       - ./:/app
     command: ["uvicorn", "api.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-    ports: ["8000:8000"]
+    ports: ["8002:8000"]
     depends_on:
       model-service: {condition: service_healthy}
       postgres: {condition: service_healthy}

@@ -290,15 +290,15 @@ stages:
       isexec: true
     - path: src/training/evaluate.py
       hash: md5
-      md5: 25f2ffe470c48da77eb2f79054e2b768
-      size: 6056
+      md5: 4e131e7ca745296843ee4f2446f4c659
+      size: 6248
       isexec: true
     outs:
     - path: artifacts/reports/latest_report.html
       hash: md5
-      md5: 88f552f036326ca1e27d0ca2d90d47d0
-      size: 1407
+      md5: 95e771bf3962d1ddb895f72fd663e8d5
+      size: 1416
     - path: artifacts/reports/latest_report.md
       hash: md5
-      md5: e2f20ea356c47fcba2f162dbe17b696f
-      size: 1743
+      md5: f80c80933d68f568f111d63ca6c241db
+      size: 1752
