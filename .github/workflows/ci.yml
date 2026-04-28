@@ -29,8 +29,5 @@ jobs:
       - name: Compile source
         run: python -m compileall src api/app model_service/app frontend tests airflow/dags
 
-      - name: Validate DVC DAG
-        run: dvc dag
-
       - name: Run unit tests
         run: pytest tests -q

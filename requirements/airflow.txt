@@ -1,5 +1,6 @@
 apache-airflow-providers-standard
 apache-airflow-providers-smtp
+pathspec==0.12.1
 requests>=2.31,<3
 PyYAML==6.0.2
 dvc==3.57.0
