@@ -1,2 +1,0 @@
-deprecated: true
-message: "Use config.yaml. This file is retained only to avoid breaking old references."
