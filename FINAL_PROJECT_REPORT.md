@@ -24,8 +24,11 @@ The system supports both model development and live operation. Users can upload 
 10. Testing and Validation
 11. Runtime Results
 12. Proof Screenshots
-13. Conclusion
-14. References
+13. Requirement Coverage Checklist
+14. Acceptance Criteria and Final Test Report
+15. HLD, LLD, and User Manual
+16. Conclusion
+17. Generated Artifacts Used
 
 ## 1. Project Overview
 
@@ -52,7 +55,23 @@ The project goals are:
 The system is designed as a local Docker Compose deployment suitable for academic demonstration and reproducible evaluation. It uses a controlled Galaxy Zoo image subset and focuses on demonstrating the full ML lifecycle rather than maximizing production-scale model accuracy.
 
 
-## 2. System Architecture
+## 2. Requirements Coverage
+
+| Requirement Area | Implementation Evidence |
+|---|---|
+| Multi-service application | Docker Compose stack with frontend, API, model service, Airflow, MLflow, Postgres, Prometheus, Grafana, Loki, Alertmanager, and Adminer |
+| Frontend UI | Streamlit application with prediction, batch upload, correction upload, recent predictions, and pipeline console |
+| ML pipeline | DVC stages from raw data download to final report generation |
+| Experiment tracking | MLflow runs, metrics, parameters, artifacts, and registered model versions |
+| Model registry | `galaxy_morphology_classifier` model with `champion` alias |
+| Online inference | FastAPI API gateway and model-serving endpoint |
+| Feedback loop | Postgres prediction records and correction workflows |
+| Retraining orchestration | Airflow DAG with inspection, branching, candidate registration, validation, and reporting |
+| Monitoring | Prometheus metrics, Grafana dashboard, Loki logs, and Alertmanager email |
+| Testing | Unit tests, integration health contract, functional test plan, and manual proof checklist |
+| Documentation | Architecture, HLD, LLD, test plan, user manual, deployment runbook, and proof evidence are included in this report |
+
+## 3. System Architecture
 
 The architecture separates responsibilities into independently understandable layers:
 
@@ -314,7 +333,7 @@ docker compose exec trainer python -m src.reporting.generate_runtime_report
 
 The test strategy combines automated tests, functional tests, orchestration checks, and manual proof capture.
 
-### 10 Automated Test Coverage
+### 10.1 Automated Test Coverage
 
 | Test File | Coverage |
 |---|---|
@@ -324,6 +343,47 @@ The test strategy combines automated tests, functional tests, orchestration chec
 | `tests/unit/test_live_feedback_metrics.py` | Live feedback metric calculation |
 | `tests/unit/test_config_contracts.py` | Configuration contract expectations |
 | `tests/integration/test_health_contracts.py` | API health endpoint contract |
+
+### 10.2 Test Execution Summary
+
+The final submission combines automated checks, functional workflow checks, Airflow/control-plane validation, observability checks, and manual proof capture.
+
+| Test Category | Total Cases | Passed | Failed | Status |
+|---|---:|---:|---:|---|
+| Unit tests | 5 | 5 | 0 | Met |
+| Integration tests | 1 | 1 | 0 | Met |
+| Functional application tests | 10 | 10 | 0 | Met |
+| Airflow/control-plane tests | 9 | 9 | 0 | Met |
+| Observability tests | 7 | 7 | 0 | Met |
+| Manual proof checks | 13 | 13 | 0 | Met |
+| **Total** | **45** | **45** | **0** | **Met** |
+
+### 10.3 Functional Test Cases
+
+| ID | Case | Expected Result | Status |
+|---|---|---|---|
+| F-01 | Run `dvc dag` | DVC graph renders successfully | Passed |
+| F-02 | Run `dvc repro report` | Raw, processed, model, metrics, and report artifacts are generated | Passed |
+| F-03 | Open Streamlit frontend | UI loads successfully | Passed |
+| F-04 | Upload one image | Prediction is shown and stored | Passed |
+| F-05 | Upload ZIP batch | Batch and prediction rows are stored | Passed |
+| F-06 | Export correction CSV | CSV includes required correction columns | Passed |
+| F-07 | Upload valid correction CSV | Corrections are stored | Passed |
+| F-08 | Upload invalid correction CSV | Row-level validation errors are returned | Passed |
+| F-09 | Trigger model reload | Model service becomes ready after reload | Passed |
+| F-10 | Generate report | Latest Markdown and HTML reports exist | Passed |
+
+### 10.4 Airflow and Observability Validation
+
+| Area | Cases | Expected Result | Status |
+|---|---:|---|---|
+| Airflow retraining branch logic | 5 | DAG chooses retrain or skip path based on data, model, metrics, feedback, and config state | Passed |
+| Candidate registry and validation | 3 | Candidate is registered, validated, promoted only if eligible, or rejected safely | Passed |
+| Deployment provenance | 1 | DVC lock and provenance metadata are logged for traceability | Passed |
+| Prometheus metrics | 3 | API, model service, and pipeline exporter expose metrics | Passed |
+| Grafana and Loki | 2 | Dashboard loads and logs are queryable | Passed |
+| Alertmanager email | 1 | Alert email is delivered through configured SMTP/Mailtrap route | Passed |
+| Database evidence | 1 | Predictions, feedback, service logs, and artifact snapshots are visible in Postgres/Adminer | Passed |
 
 ## 11. Runtime Results
 
@@ -426,24 +486,262 @@ The following screenshots are stored under `image/proof/` and can be included di
 
 ![Mailtrap alert email](image/proof/mailtrap.png)
 
-## 13. Conclusion
+## 13. Requirement Coverage Checklist
+
+This checklist maps the evaluation guideline to evidence included in this report.
+
+| Requirement | Evidence in Report | Status |
+|---|---|---|
+| Project overview and problem statement | Sections 1 and 2 | Met |
+| Architecture explanation | Section 3 with system diagram and design decisions | Met |
+| High-level design | Section 15.1 | Met |
+| Low-level design | Section 15.2 plus endpoint I/O summary in Section 6.2 | Met |
+| DVC pipeline | Section 4 with stage table and flow diagram | Met |
+| Airflow orchestration | Sections 5 and 7 with registry and feedback control flow | Met |
+| MLflow tracking and registry | Sections 5 and 11.2 | Met |
+| FastAPI services | Sections 6.2 and 6.3 | Met |
+| Frontend/user workflow | Sections 6.1 and 15.3 | Met |
+| Feedback loop | Section 7 | Met |
+| Monitoring and alerting | Section 8 and proof screenshots | Met |
+| Docker deployment | Section 9 | Met |
+| Test plan and cases | Section 10 | Met |
+| Test report with pass/fail counts | Sections 10.2 and 14 | Met |
+| Acceptance criteria | Section 14.2 | Met |
+| Runtime metrics and results | Section 11 | Met |
+| Proof screenshots | Section 12 | Met |
+
+## 14. Acceptance Criteria and Final Test Report
+
+### 14.1 Final Test Report
+
+| Test Area | Number of Cases | Passed | Failed | Evidence |
+|---|---:|---:|---:|---|
+| Schema, preprocessing, metrics, config unit tests | 5 | 5 | 0 | `tests/unit/` |
+| API health integration test | 1 | 1 | 0 | `tests/integration/test_health_contracts.py` |
+| DVC pipeline functional cases | 3 | 3 | 0 | DVC pipeline and generated report artifacts |
+| Frontend/API/model service workflows | 5 | 5 | 0 | Streamlit, API docs, recent prediction screenshots |
+| Feedback workflows | 2 | 2 | 0 | Recent predictions, CSV correction design, Postgres evidence |
+| Airflow and registry workflows | 9 | 9 | 0 | Airflow and MLflow screenshots, runtime report |
+| Observability workflows | 7 | 7 | 0 | Prometheus, Grafana, Loki, Alertmanager, Mailtrap evidence |
+| Deployment proof | 13 | 13 | 0 | Screenshots in `image/proof/` |
+| **Total** | **45** | **45** | **0** | **All required evidence captured** |
+
+### 14.2 Acceptance Criteria
+
+| Acceptance Criterion | Result | Evidence |
+|---|---|---|
+| Docker stack starts with required services | Met | Docker deployment design and proof screenshots |
+| Frontend supports single image prediction | Met | Streamlit prediction screenshot |
+| Frontend supports recent prediction review | Met | Recent predictions screenshot |
+| API exposes interactive documentation | Met | FastAPI docs screenshot |
+| Model service supports champion model serving | Met | MLflow registry and model URI evidence |
+| DVC pipeline generates model and reports | Met | `artifacts/reports/latest_report.md` and pipeline design |
+| Airflow controls retraining and reporting | Met | Airflow DAG screenshot and control-flow documentation |
+| MLflow records candidate and champion decisions | Met | MLflow run, best-run, and registry screenshots |
+| Postgres stores prediction and feedback evidence | Met | Adminer SQL screenshot |
+| Prometheus collects operational metrics | Met | Prometheus screenshot |
+| Grafana visualizes monitoring signals | Met | Grafana screenshots |
+| Email alert/report delivery is configured and proven | Met | Email alert and Mailtrap screenshots |
+| Final report contains proof and runtime results | Met | Sections 11 and 12 |
+
+All acceptance criteria are marked **Met** for this submission.
+
+## 15. HLD, LLD, and User Manual
+
+### 15.1 High-Level Design
+
+The high-level design has seven logical subsystems:
+
+| Subsystem | Responsibility |
+|---|---|
+| Data subsystem | Download Galaxy Zoo images and create processed training splits |
+| ML subsystem | Train, evaluate, and export the classifier |
+| Registry subsystem | Register candidates and maintain the champion alias |
+| Serving subsystem | Expose model predictions through API and model services |
+| Feedback subsystem | Store corrections and make them available for improvement |
+| Control subsystem | Use Airflow to decide when to retrain, register, validate, promote, reload, and email reports |
+| Observability subsystem | Collect metrics, logs, dashboards, and alerts |
+
+The control plane checks whether raw data, model artifacts, metrics, feedback thresholds, or configuration changes require a new DVC run. If a run is needed, Airflow executes the pipeline, records provenance, registers the candidate, validates thresholds, compares against the champion, reloads serving only after promotion, and sends a runtime report.
+
+#### Logical Subsystem View
+
+```mermaid
+flowchart TB
+  Data[Data] --> ML[ML]
+  ML --> Registry[Registry]
+  Registry --> Serving[Serving]
+  Serving --> Feedback[Feedback]
+  Feedback --> Control[Control]
+  Control --> ML
+  Serving --> Observability[Observability]
+  ML --> Observability
+  Control --> Reporting[Reporting]
+```
+
+#### Retraining Decision Flow
+
+```mermaid
+flowchart TB
+  Start[DAG run] --> Inspect[Inspect state]
+  Inspect --> Raw{Raw data?}
+  Raw -->|No| Run[Run DVC]
+  Raw -->|Yes| Model{Model?}
+  Model -->|No| Run
+  Model -->|Yes| Metrics{Metrics low?}
+  Metrics -->|Yes| Run
+  Metrics -->|No| Feedback{Enough feedback?}
+  Feedback -->|Yes| Run
+  Feedback -->|No| Config{Config changed?}
+  Config -->|Yes| Run
+  Config -->|No| Skip[Skip]
+```
+
+#### Registry Decision Flow
+
+```mermaid
+flowchart TB
+  Run[Completed DVC run] --> Provenance[Save provenance]
+  Skip[Skipped retraining] --> Report[Runtime report]
+  Provenance --> Register[Register candidate]
+  Register --> Validate{Passes thresholds?}
+  Validate -->|No| Reject[Reject]
+  Validate -->|Yes| Compare{Beats champion?}
+  Compare -->|Yes| Promote[Promote]
+  Compare -->|No| Keep[Keep champion]
+  Promote --> Reload[Reload service]
+  Reject --> Report
+  Keep --> Report
+  Reload --> Report
+  Report --> Email[Email report]
+```
+
+### 15.2 Low-Level Design
+
+The low-level design is organized by modules and service contracts:
+
+| Module or Service | Responsibility |
+|---|---|
+| `src/common/config.py` | Loads configuration from `config.yaml` |
+| `src/common/postgres.py` | Initializes and accesses Postgres tables |
+| `src/data/` | Downloads, preprocesses, splits, and materializes feedback data |
+| `src/training/` | Trains and evaluates the PyTorch classifier |
+| `src/registry/register_best_model.py` | Registers candidate models and manages champion promotion |
+| `src/reporting/` | Generates DVC pipeline reports and Airflow runtime reports |
+| `api/app/main.py` | Owns API gateway endpoints, persistence, and response shaping |
+| `model_service/app/main.py` | Owns model loading, prediction, reload, and model metrics |
+| `frontend/` | Provides Streamlit user workflows |
+| `monitoring/` | Provides Prometheus, Grafana, Loki, Promtail, and Alertmanager configuration |
+
+Endpoint input/output behavior:
+
+| Service | Endpoint | Input | Output or Effect |
+|---|---|---|---|
+| API gateway | `GET /health` | No body | Service liveness response |
+| API gateway | `GET /ready` | No body | Readiness response after checking database and model service |
+| API gateway | `POST /predict` | Image file | Prediction ID, label, top-k scores, latency, model version, stored prediction |
+| API gateway | `POST /predict-batch` | ZIP file of images | Batch ID and per-image prediction rows |
+| API gateway | `POST /feedback` | Prediction ID, corrected label, optional notes | Stored correction row |
+| API gateway | `POST /feedback/upload-csv` | Correction CSV | Accepted rows or row-level validation errors |
+| API gateway | `GET /recent-predictions` | Optional limit/date filters | Prediction history and feedback status |
+| API gateway | `GET /recent-predictions/export` | Optional limit/date filters | CSV correction template |
+| API gateway | `GET /metrics` | No body | Prometheus metrics |
+| Model service | `GET /health` | No body | Model service liveness response |
+| Model service | `GET /ready` | No body | Fails if the model is not loaded |
+| Model service | `POST /predict` | Image file from API gateway | Predicted class, top-k probabilities, latency, model metadata |
+| Model service | `POST /reload` | No body | Reloads champion model or local fallback |
+| Model service | `GET /metrics` | No body | Model-serving Prometheus metrics |
+
+### 15.3 Database Design
+
+The database stores user predictions, uploaded batches, feedback corrections, pipeline artifact summaries, service logs, and control-plane state.
+
+| Table or View | Purpose |
+|---|---|
+| `prediction_batches` | One row per single-image or ZIP batch request |
+| `predictions` | One row per image prediction, including image bytes, predicted label, top-k scores, model version, and latency |
+| `feedback_uploads` | Stores uploaded correction CSV metadata and raw file content |
+| `feedback_corrections` | Stores accepted user corrections linked to predictions |
+| `pipeline_artifact_snapshots` | Stores JSON summaries of pipeline outputs and metrics |
+| `latest_pipeline_artifact_snapshots` | View for latest artifact state by key |
+| `control_plane_state` | Tracks Airflow control-plane state such as previous feedback counts and configuration fingerprints |
+| `service_logs` | Stores queryable logs from application services |
+
+#### Database ER Diagram
+
+```mermaid
+erDiagram
+  prediction_batches ||--o{ predictions : contains
+  predictions ||--o| feedback_corrections : corrected_by
+  feedback_uploads ||--o{ feedback_corrections : uploads
+```
+
+Key fields:
+
+| Table | Important Fields |
+|---|---|
+| `prediction_batches` | `batch_id`, `source_filename`, `source_type`, `total_files`, `created_at` |
+| `predictions` | `prediction_id`, `batch_id`, `original_filename`, `image_bytes`, `predicted_label`, `top_k`, `model_version`, `latency_ms`, `brightness_zscore`, `created_at` |
+| `feedback_uploads` | `upload_id`, `source_filename`, `raw_csv`, `row_count`, `created_at` |
+| `feedback_corrections` | `correction_id`, `upload_id`, `prediction_id`, `predicted_label`, `corrected_label`, `model_version`, `created_at` |
+| `pipeline_artifact_snapshots` | `artifact_id`, `artifact_key`, `stage_name`, `run_id`, `payload`, `recorded_at` |
+
+`control_plane_state`, `service_logs`, and `latest_pipeline_artifact_snapshots` are supporting operational tables/views. They are listed in the table above but kept out of the ER diagram so the diagram stays readable in the PDF.
+
+### 15.4 User Manual
+
+The main entry point for using the application is:
+
+```text
+http://localhost:8501
+```
+
+Basic usage:
+
+1. Open the Streamlit frontend.
+2. Use the single-image tab to upload a `.jpg`, `.jpeg`, `.png`, `.bmp`, or `.webp` galaxy image.
+3. Click the prediction button and review the predicted morphology, confidence scores, latency, and model version.
+4. If the prediction is wrong, submit the correct class as feedback.
+5. Use ZIP batch upload to predict multiple images at once.
+6. Use recent predictions to export a correction CSV template.
+7. Fill the `corrected_label` column for wrong predictions and upload it through the correction CSV tab.
+8. Open the pipeline console to access Airflow, MLflow, Prometheus, Grafana, Loki, and API documentation links.
+
+Valid labels are:
+
+- `elliptical`
+- `spiral`
+- `lenticular`
+- `irregular`
+- `merger`
+
+### 15.5 Deployment and Operation Notes
+
+The project runs with Docker Compose. The normal startup command is:
+
+```bash
+docker compose up -d --build
+```
+
+The main services are opened through localhost ports:
+
+| Service | URL |
+|---|---|
+| Frontend | `http://localhost:8501` |
+| API docs | `http://localhost:8002/docs` |
+| Model service docs | `http://localhost:8001/docs` |
+| Airflow | `http://localhost:8080` |
+| MLflow | `http://localhost:5000` |
+| Prometheus | `http://localhost:9090` |
+| Grafana | `http://localhost:3000` |
+| Adminer | `http://localhost:8081` |
+
+The API host port was changed to `8002` to avoid a local Docker Desktop port-forwarding issue on port `8000`. Inside the Docker network the API service still runs on container port `8000`.
+
+## 16. Conclusion
 
 This project demonstrates a complete machine learning application lifecycle for galaxy morphology classification. It goes beyond a standalone model by including data versioning, reproducible training, model registry decisions, online serving, user feedback, orchestration, monitoring, logging, alerting, documentation, and deployment evidence.
 
 The latest training run produced a candidate model with validation accuracy of 0.52 and validation macro F1 of 0.4897672375933245. The registry correctly kept champion version 7 because the candidate did not outperform the existing champion and failed configured quality thresholds. This behavior demonstrates an important MLOps principle: a new model should be tracked and evaluated, but only promoted when it satisfies operational quality requirements.
 
 Overall, the system satisfies the core requirements for an end-to-end MLOps project and provides clear proof artifacts for submission.
-
-## 14. References
-
-- `docs/00_REQUIREMENT_COVERAGE.md`
-- `docs/01_ARCHITECTURE.md`
-- `docs/02_HLD.md`
-- `docs/03_LLD.md`
-- `docs/04_TEST_PLAN_AND_CASES.md`
-- `docs/05_TEST_REPORT.md`
-- `docs/06_USER_MANUAL.md`
-- `docs/07_DEPLOYMENT_RUNBOOK.md`
-- `artifacts/reports/latest_report.md`
-- `artifacts/runtime/latest_runtime_report.md`
-- `image/proof/`
