@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import mimetypes
@@ -13,7 +12,13 @@ from src.common.logging_utils import configure_logging
 LOGGER = configure_logging("email")
 
 
-def send_email_report(config: dict, subject: str, body_text: str, body_html: str | None = None, attachments: list[str | Path] | None = None) -> None:
+def send_email_report(
+    config: dict,
+    subject: str,
+    body_text: str,
+    body_html: str | None = None,
+    attachments: list[str | Path] | None = None,
+) -> None:
     if not get_config_value(config, "email.enabled", False):
         LOGGER.info("Email delivery disabled in config; skipping report email.")
         return
@@ -28,7 +33,9 @@ def send_email_report(config: dict, subject: str, body_text: str, body_html: str
     password = os.getenv(password_env, "") if password_env else ""
 
     if not host or not sender or not recipients:
-        raise ValueError("Email config is incomplete. Set smtp host, sender, and recipients.")
+        raise ValueError(
+            "Email config is incomplete. Set smtp host, sender, and recipients."
+        )
 
     message = EmailMessage()
     message["Subject"] = subject

@@ -14,24 +14,27 @@ from src.common.config import get_config_value, load_config
 from src.common.logging_utils import configure_logging
 from src.common.postgres import cluster_table, get_db_connection, initialize_database
 
-LOGGER = configure_logging('feedback_store')
+LOGGER = configure_logging("feedback_store")
 
 RECENT_PREDICTION_COLUMNS = [
-    'prediction_id',
-    'batch_id',
-    'original_filename',
-    'predicted_label',
-    'model_version',
-    'latency_ms',
-    'created_at',
+    "prediction_id",
+    "batch_id",
+    "original_filename",
+    "predicted_label",
+    "model_version",
+    "latency_ms",
+    "created_at",
 ]
-FEEDBACK_UPLOAD_COLUMNS = RECENT_PREDICTION_COLUMNS + ['corrected_label']
+FEEDBACK_UPLOAD_COLUMNS = RECENT_PREDICTION_COLUMNS + ["corrected_label"]
 
 
 class FeedbackStore:
     def __init__(self):
         initialize_database()
-        self.allowed_labels = {str(label).strip().lower() for label in get_config_value(load_config(), 'data.classes', [])}
+        self.allowed_labels = {
+            str(label).strip().lower()
+            for label in get_config_value(load_config(), "data.classes", [])
+        }
 
     def _normalize_feedback_label(self, label: str) -> str:
         normalized = str(label).strip().lower()
@@ -42,12 +45,24 @@ class FeedbackStore:
         return normalized
 
     @staticmethod
-    def _normalize_date_bounds(start_date: date | None, end_date: date | None) -> tuple[datetime | None, datetime | None]:
-        start_dt = datetime.combine(start_date, time.min, tzinfo=timezone.utc) if start_date else None
-        end_dt = datetime.combine(end_date, time.max, tzinfo=timezone.utc) if end_date else None
+    def _normalize_date_bounds(
+        start_date: date | None, end_date: date | None
+    ) -> tuple[datetime | None, datetime | None]:
+        start_dt = (
+            datetime.combine(start_date, time.min, tzinfo=timezone.utc)
+            if start_date
+            else None
+        )
+        end_dt = (
+            datetime.combine(end_date, time.max, tzinfo=timezone.utc)
+            if end_date
+            else None
+        )
         return start_dt, end_dt
 
-    def create_batch(self, source_filename: str, source_type: str, total_files: int) -> str:
+    def create_batch(
+        self, source_filename: str, source_type: str, total_files: int
+    ) -> str:
         batch_id = str(uuid.uuid4())
         with get_db_connection() as conn:
             with conn.cursor() as cur:
@@ -99,7 +114,9 @@ class FeedbackStore:
                 )
         return prediction_id
 
-    def add_feedback(self, prediction_id: str, ground_truth_label: str, notes: str | None = None) -> None:
+    def add_feedback(
+        self, prediction_id: str, ground_truth_label: str, notes: str | None = None
+    ) -> None:
         ground_truth_label = self._normalize_feedback_label(ground_truth_label)
         with get_db_connection() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
@@ -113,9 +130,11 @@ class FeedbackStore:
                 )
                 row = cur.fetchone()
                 if not row:
-                    raise ValueError(f'Prediction {prediction_id} does not exist.')
-                if row['predicted_label'] == ground_truth_label:
-                    raise ValueError('Feedback is only needed when the actual label differs from the predicted label.')
+                    raise ValueError(f"Prediction {prediction_id} does not exist.")
+                if row["predicted_label"] == ground_truth_label:
+                    raise ValueError(
+                        "Feedback is only needed when the actual label differs from the predicted label."
+                    )
                 cur.execute(
                     """
                     INSERT INTO feedback_corrections(
@@ -130,18 +149,18 @@ class FeedbackStore:
                     """,
                     (
                         str(uuid.uuid4()),
-                        row['prediction_id'],
-                        row['original_filename'],
-                        row['predicted_label'],
+                        row["prediction_id"],
+                        row["original_filename"],
+                        row["predicted_label"],
                         ground_truth_label,
-                        row['model_version'],
-                        row['latency_ms'],
-                        row['created_at'],
+                        row["model_version"],
+                        row["latency_ms"],
+                        row["created_at"],
                         notes,
                     ),
                 )
-        cluster_table('feedback_corrections', 'idx_feedback_corrections_created_at')
-        LOGGER.info('Feedback recorded for prediction_id=%s', prediction_id)
+        cluster_table("feedback_corrections", "idx_feedback_corrections_created_at")
+        LOGGER.info("Feedback recorded for prediction_id=%s", prediction_id)
 
     def recent_predictions(
         self,
@@ -154,12 +173,12 @@ class FeedbackStore:
         params: list[Any] = []
         start_dt, end_dt = self._normalize_date_bounds(start_date, end_date)
         if start_dt:
-            where_clauses.append('p.created_at >= %s')
+            where_clauses.append("p.created_at >= %s")
             params.append(start_dt)
         if end_dt:
-            where_clauses.append('p.created_at <= %s')
+            where_clauses.append("p.created_at <= %s")
             params.append(end_dt)
-        where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ''
+        where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
         params.append(limit)
         with get_db_connection() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
@@ -184,9 +203,9 @@ class FeedbackStore:
         return [
             {
                 **row,
-                'created_at': row['created_at'].isoformat(),
-                'batch_id': str(row['batch_id']) if row['batch_id'] else None,
-                'prediction_id': str(row['prediction_id']),
+                "created_at": row["created_at"].isoformat(),
+                "batch_id": str(row["batch_id"]) if row["batch_id"] else None,
+                "prediction_id": str(row["prediction_id"]),
             }
             for row in rows
         ]
@@ -198,60 +217,94 @@ class FeedbackStore:
         end_date: date | None = None,
         limit: int = 5000,
     ) -> bytes:
-        rows = self.recent_predictions(limit=limit, start_date=start_date, end_date=end_date)
+        rows = self.recent_predictions(
+            limit=limit, start_date=start_date, end_date=end_date
+        )
         output = io.StringIO()
         writer = csv.DictWriter(output, fieldnames=FEEDBACK_UPLOAD_COLUMNS)
         writer.writeheader()
         for row in rows:
-            writer.writerow({**row, 'corrected_label': ''})
-        return output.getvalue().encode('utf-8')
+            writer.writerow({**row, "corrected_label": ""})
+        return output.getvalue().encode("utf-8")
 
     def feedback_summary(self) -> dict[str, int]:
         with get_db_connection() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
-                cur.execute('SELECT COUNT(*) AS prediction_count FROM predictions')
-                prediction_count = int(cur.fetchone()['prediction_count'])
-                cur.execute('SELECT COUNT(*) AS feedback_count FROM feedback_corrections')
-                feedback_count = int(cur.fetchone()['feedback_count'])
+                cur.execute("SELECT COUNT(*) AS prediction_count FROM predictions")
+                prediction_count = int(cur.fetchone()["prediction_count"])
+                cur.execute(
+                    "SELECT COUNT(*) AS feedback_count FROM feedback_corrections"
+                )
+                feedback_count = int(cur.fetchone()["feedback_count"])
         return {
-            'prediction_count': prediction_count,
-            'feedback_count': feedback_count,
+            "prediction_count": prediction_count,
+            "feedback_count": feedback_count,
         }
 
-    def validate_feedback_csv(self, csv_bytes: bytes) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
-        text = csv_bytes.decode('utf-8-sig')
+    def validate_feedback_csv(
+        self, csv_bytes: bytes
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+        text = csv_bytes.decode("utf-8-sig")
         reader = csv.DictReader(io.StringIO(text))
         fieldnames = reader.fieldnames or []
         errors: list[dict[str, Any]] = []
-        missing_columns = [column for column in FEEDBACK_UPLOAD_COLUMNS if column not in fieldnames]
-        extra_columns = [column for column in fieldnames if column not in FEEDBACK_UPLOAD_COLUMNS]
+        missing_columns = [
+            column for column in FEEDBACK_UPLOAD_COLUMNS if column not in fieldnames
+        ]
+        extra_columns = [
+            column for column in fieldnames if column not in FEEDBACK_UPLOAD_COLUMNS
+        ]
         if missing_columns:
-            errors.append({'row_number': 'header', 'error': f"Missing required columns: {', '.join(missing_columns)}"})
+            errors.append(
+                {
+                    "row_number": "header",
+                    "error": f"Missing required columns: {', '.join(missing_columns)}",
+                }
+            )
         if extra_columns:
-            errors.append({'row_number': 'header', 'error': f"Unexpected columns present: {', '.join(extra_columns)}"})
+            errors.append(
+                {
+                    "row_number": "header",
+                    "error": f"Unexpected columns present: {', '.join(extra_columns)}",
+                }
+            )
         if errors:
             return [], errors, []
 
         valid_rows: list[dict[str, Any]] = []
         uploaded_rows: list[dict[str, Any]] = []
         for row_number, row in enumerate(reader, start=2):
-            normalized = {key: (value or '').strip() for key, value in row.items()}
+            normalized = {key: (value or "").strip() for key, value in row.items()}
             uploaded_rows.append(normalized)
             for column in FEEDBACK_UPLOAD_COLUMNS:
                 if not normalized.get(column):
-                    errors.append({'row_number': row_number, 'error': f'Column `{column}` is empty.'})
+                    errors.append(
+                        {
+                            "row_number": row_number,
+                            "error": f"Column `{column}` is empty.",
+                        }
+                    )
 
-            predicted_label = normalized.get('predicted_label', '')
-            corrected_label = normalized.get('corrected_label', '')
+            predicted_label = normalized.get("predicted_label", "")
+            corrected_label = normalized.get("corrected_label", "")
             if corrected_label:
                 try:
                     corrected_label = self._normalize_feedback_label(corrected_label)
-                    normalized['corrected_label'] = corrected_label
+                    normalized["corrected_label"] = corrected_label
                 except ValueError as exc:
-                    errors.append({'row_number': row_number, 'error': str(exc)})
-            if predicted_label and corrected_label and predicted_label == corrected_label:
-                errors.append({'row_number': row_number, 'error': '`corrected_label` is only needed when it differs from `predicted_label`.'})
-            prediction_id = normalized.get('prediction_id')
+                    errors.append({"row_number": row_number, "error": str(exc)})
+            if (
+                predicted_label
+                and corrected_label
+                and predicted_label == corrected_label
+            ):
+                errors.append(
+                    {
+                        "row_number": row_number,
+                        "error": "`corrected_label` is only needed when it differs from `predicted_label`.",
+                    }
+                )
+            prediction_id = normalized.get("prediction_id")
             if prediction_id:
                 with get_db_connection() as conn:
                     with conn.cursor(row_factory=dict_row) as cur:
@@ -266,41 +319,61 @@ class FeedbackStore:
                         )
                         db_row = cur.fetchone()
                 if not db_row:
-                    errors.append({'row_number': row_number, 'error': f'Prediction id `{prediction_id}` was not found in the database.'})
+                    errors.append(
+                        {
+                            "row_number": row_number,
+                            "error": f"Prediction id `{prediction_id}` was not found in the database.",
+                        }
+                    )
                 else:
                     expected = {
-                        'prediction_id': str(db_row['prediction_id']),
-                        'batch_id': str(db_row['batch_id']) if db_row['batch_id'] else '',
-                        'original_filename': db_row['original_filename'],
-                        'predicted_label': db_row['predicted_label'],
-                        'model_version': db_row['model_version'],
-                        'latency_ms': f"{float(db_row['latency_ms']):.2f}",
-                        'created_at': db_row['created_at'].isoformat(),
+                        "prediction_id": str(db_row["prediction_id"]),
+                        "batch_id": (
+                            str(db_row["batch_id"]) if db_row["batch_id"] else ""
+                        ),
+                        "original_filename": db_row["original_filename"],
+                        "predicted_label": db_row["predicted_label"],
+                        "model_version": db_row["model_version"],
+                        "latency_ms": f"{float(db_row['latency_ms']):.2f}",
+                        "created_at": db_row["created_at"].isoformat(),
                     }
                     for column, expected_value in expected.items():
-                        given_value = normalized.get(column, '')
+                        given_value = normalized.get(column, "")
                         comparable_given = given_value
-                        if column == 'latency_ms':
+                        if column == "latency_ms":
                             try:
                                 comparable_given = f"{float(given_value):.2f}"
                             except ValueError:
-                                errors.append({'row_number': row_number, 'error': '`latency_ms` is not numeric.'})
+                                errors.append(
+                                    {
+                                        "row_number": row_number,
+                                        "error": "`latency_ms` is not numeric.",
+                                    }
+                                )
                                 continue
                         if comparable_given != expected_value:
-                            errors.append({
-                                'row_number': row_number,
-                                'error': f'Column `{column}` does not match the stored prediction record.',
-                            })
+                            errors.append(
+                                {
+                                    "row_number": row_number,
+                                    "error": f"Column `{column}` does not match the stored prediction record.",
+                                }
+                            )
 
-            if not any(error['row_number'] == row_number for error in errors):
+            if not any(error["row_number"] == row_number for error in errors):
                 valid_rows.append(normalized)
 
         return valid_rows, errors, uploaded_rows
 
-    def upload_feedback_csv(self, source_filename: str, csv_bytes: bytes) -> dict[str, Any]:
+    def upload_feedback_csv(
+        self, source_filename: str, csv_bytes: bytes
+    ) -> dict[str, Any]:
         valid_rows, errors, uploaded_rows = self.validate_feedback_csv(csv_bytes)
         if errors:
-            return {'status': 'validation_failed', 'errors': errors, 'row_count': len(uploaded_rows)}
+            return {
+                "status": "validation_failed",
+                "errors": errors,
+                "row_count": len(uploaded_rows),
+            }
 
         upload_id = str(uuid.uuid4())
         with get_db_connection() as conn:
@@ -331,21 +404,23 @@ class FeedbackStore:
                         (
                             str(uuid.uuid4()),
                             upload_id,
-                            row['prediction_id'],
-                            row['original_filename'],
-                            row['predicted_label'],
-                            row['corrected_label'],
-                            row['model_version'],
-                            float(row['latency_ms']),
-                            row['created_at'],
+                            row["prediction_id"],
+                            row["original_filename"],
+                            row["predicted_label"],
+                            row["corrected_label"],
+                            row["model_version"],
+                            float(row["latency_ms"]),
+                            row["created_at"],
                         ),
                     )
-        cluster_table('feedback_uploads', 'idx_feedback_uploads_created_at')
-        cluster_table('feedback_corrections', 'idx_feedback_corrections_created_at')
-        LOGGER.info('Feedback CSV uploaded source=%s rows=%s', source_filename, len(valid_rows))
+        cluster_table("feedback_uploads", "idx_feedback_uploads_created_at")
+        cluster_table("feedback_corrections", "idx_feedback_corrections_created_at")
+        LOGGER.info(
+            "Feedback CSV uploaded source=%s rows=%s", source_filename, len(valid_rows)
+        )
         return {
-            'status': 'uploaded',
-            'upload_id': upload_id,
-            'row_count': len(valid_rows),
-            'errors': [],
+            "status": "uploaded",
+            "upload_id": upload_id,
+            "row_count": len(valid_rows),
+            "errors": [],
         }

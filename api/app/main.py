@@ -117,7 +117,9 @@ async def ready():
         API_READY.set(0)
         DB_READY.set(0)
         LOGGER.exception("Readiness check failed: %s", exc)
-        raise HTTPException(status_code=503, detail="Model service or database not ready") from exc
+        raise HTTPException(
+            status_code=503, detail="Model service or database not ready"
+        ) from exc
 
 
 @app.post("/predict", response_model=PredictionResponse)
@@ -128,7 +130,9 @@ async def predict(file: UploadFile = File(...)):
 
     content = await file.read()
     if len(content) > MAX_UPLOAD_MB * 1024 * 1024:
-        raise HTTPException(status_code=413, detail=f"File exceeds {MAX_UPLOAD_MB} MB limit.")
+        raise HTTPException(
+            status_code=413, detail=f"File exceeds {MAX_UPLOAD_MB} MB limit."
+        )
 
     try:
         with API_LATENCY.labels("/predict").time():
@@ -191,20 +195,28 @@ async def predict_batch(zip_file: UploadFile = File(...)):
 
     archive_bytes = await zip_file.read()
     if len(archive_bytes) > MAX_ZIP_UPLOAD_MB * 1024 * 1024:
-        raise HTTPException(status_code=413, detail=f"ZIP file exceeds {MAX_ZIP_UPLOAD_MB} MB limit.")
+        raise HTTPException(
+            status_code=413, detail=f"ZIP file exceeds {MAX_ZIP_UPLOAD_MB} MB limit."
+        )
 
     try:
         archive = zipfile.ZipFile(io.BytesIO(archive_bytes))
     except zipfile.BadZipFile as exc:
-        raise HTTPException(status_code=400, detail="Uploaded file is not a valid ZIP archive.") from exc
+        raise HTTPException(
+            status_code=400, detail="Uploaded file is not a valid ZIP archive."
+        ) from exc
 
     image_members = [
         member
         for member in archive.infolist()
-        if not member.is_dir() and any(member.filename.lower().endswith(suffix) for suffix in ALLOWED_SUFFIXES)
+        if not member.is_dir()
+        and any(member.filename.lower().endswith(suffix) for suffix in ALLOWED_SUFFIXES)
     ]
     if not image_members:
-        raise HTTPException(status_code=400, detail="ZIP archive does not contain supported image files.")
+        raise HTTPException(
+            status_code=400,
+            detail="ZIP archive does not contain supported image files.",
+        )
 
     batch_id = _get_store().create_batch(
         source_filename=zip_file.filename,
@@ -254,13 +266,17 @@ async def predict_batch(zip_file: UploadFile = File(...)):
         len(items),
         batch_id,
     )
-    return BatchPredictionResponse(batch_id=batch_id, total_images=len(items), items=items)
+    return BatchPredictionResponse(
+        batch_id=batch_id, total_images=len(items), items=items
+    )
 
 
 @app.post("/feedback", response_model=FeedbackResponse)
 async def submit_feedback(payload: FeedbackRequest):
     try:
-        _get_store().add_feedback(payload.prediction_id, payload.ground_truth_label, payload.notes)
+        _get_store().add_feedback(
+            payload.prediction_id, payload.ground_truth_label, payload.notes
+        )
         FEEDBACK_COUNT.inc()
         CORRECTION_ROWS_STORED.inc()
         API_REQUESTS.labels("/feedback", "POST", "200").inc()
@@ -285,7 +301,9 @@ async def upload_feedback_csv(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="A CSV file is required.")
 
     content = await file.read()
-    result = _get_store().upload_feedback_csv(source_filename=file.filename, csv_bytes=content)
+    result = _get_store().upload_feedback_csv(
+        source_filename=file.filename, csv_bytes=content
+    )
     if result["status"] == "validation_failed":
         CSV_VALIDATION_FAILURES_TOTAL.inc(len(result["errors"]))
         API_REQUESTS.labels("/feedback/upload-csv", "POST", "400").inc()
@@ -304,7 +322,9 @@ async def recent_predictions(
     end_date: date | None = None,
 ):
     try:
-        items = _get_store().recent_predictions(limit=limit, start_date=start_date, end_date=end_date)
+        items = _get_store().recent_predictions(
+            limit=limit, start_date=start_date, end_date=end_date
+        )
         RECENT_PREDICTIONS_SIZE.set(len(items))
         LOGGER.info(
             "Recent predictions requested limit=%s returned=%s start_date=%s end_date=%s",
@@ -316,7 +336,9 @@ async def recent_predictions(
         return {"items": items, "summary": _get_store().feedback_summary()}
     except Exception as exc:  # noqa: BLE001
         LOGGER.exception("Unable to fetch recent predictions: %s", exc)
-        raise HTTPException(status_code=500, detail="Unable to fetch recent predictions") from exc
+        raise HTTPException(
+            status_code=500, detail="Unable to fetch recent predictions"
+        ) from exc
 
 
 @app.get("/recent-predictions/export")
@@ -339,7 +361,9 @@ async def export_recent_predictions(
         )
     except Exception as exc:  # noqa: BLE001
         LOGGER.exception("Unable to export recent predictions: %s", exc)
-        raise HTTPException(status_code=500, detail="Unable to export recent predictions") from exc
+        raise HTTPException(
+            status_code=500, detail="Unable to export recent predictions"
+        ) from exc
 
 
 @app.exception_handler(Exception)

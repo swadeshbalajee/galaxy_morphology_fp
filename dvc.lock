@@ -200,17 +200,17 @@ stages:
       isexec: true
     - path: src/training/train.py
       hash: md5
-      md5: f4e638eeadc207f6bccdfc64bc6ed2c2
-      size: 13919
+      md5: 8bf5adc0ddc32064189c2b4265cd2fac
+      size: 14808
       isexec: true
     outs:
     - path: artifacts/confusion_matrix.csv
       hash: md5
-      md5: 51fe5fb8b60d5a4aae8e338b6fa830c4
+      md5: da9c1729f5cb893c429de0b94ac2a48f
       size: 145
     - path: models/latest
       hash: md5
-      md5: 5f32e61812e6056e25b84edd93571105.dir
+      md5: 8de23243cce3aeceb83faa8e70e85299.dir
       size: 44801461
       nfiles: 7
   evaluate:
@@ -265,7 +265,7 @@ stages:
       isexec: true
     - path: models/latest
       hash: md5
-      md5: 5f32e61812e6056e25b84edd93571105.dir
+      md5: 8de23243cce3aeceb83faa8e70e85299.dir
       size: 44801461
       nfiles: 7
     - path: src/common/artifact_store.py
@@ -290,15 +290,15 @@ stages:
       isexec: true
     - path: src/training/evaluate.py
       hash: md5
-      md5: 4e131e7ca745296843ee4f2446f4c659
-      size: 6248
+      md5: 5176eb0bbd36d3d885095ca02622f903
+      size: 7679
       isexec: true
     outs:
     - path: artifacts/reports/latest_report.html
       hash: md5
-      md5: 95e771bf3962d1ddb895f72fd663e8d5
-      size: 1416
+      md5: e160c0c6e8af13bd2cb10591f626fd84
+      size: 1418
     - path: artifacts/reports/latest_report.md
       hash: md5
-      md5: f80c80933d68f568f111d63ca6c241db
-      size: 1752
+      md5: b9d6596d22ec35ea1cf392f5229ba595
+      size: 1754

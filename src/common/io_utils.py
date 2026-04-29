@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import json
@@ -21,10 +20,17 @@ def reset_dir(path: str | Path) -> Path:
     return path
 
 
-def list_image_files(folder: str | Path, allowed_suffixes: list[str] | set[str] | None = None) -> list[Path]:
+def list_image_files(
+    folder: str | Path, allowed_suffixes: list[str] | set[str] | None = None
+) -> list[Path]:
     folder = Path(folder)
-    allowed = {s.lower() for s in (allowed_suffixes or ['.jpg', '.jpeg', '.png', '.bmp', '.webp'])}
-    return sorted([p for p in folder.rglob('*') if p.is_file() and p.suffix.lower() in allowed])
+    allowed = {
+        s.lower()
+        for s in (allowed_suffixes or [".jpg", ".jpeg", ".png", ".bmp", ".webp"])
+    }
+    return sorted(
+        [p for p in folder.rglob("*") if p.is_file() and p.suffix.lower() in allowed]
+    )
 
 
 def class_dirs(source_dir: str | Path) -> list[Path]:
@@ -37,7 +43,7 @@ def class_dirs(source_dir: str | Path) -> list[Path]:
 def write_json(path: str | Path, payload: dict[str, Any]) -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2), encoding='utf-8')
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return path
 
 
@@ -45,4 +51,4 @@ def read_json(path: str | Path, default: Any = None) -> Any:
     path = Path(path)
     if not path.exists():
         return default
-    return json.loads(path.read_text(encoding='utf-8'))
+    return json.loads(path.read_text(encoding="utf-8"))

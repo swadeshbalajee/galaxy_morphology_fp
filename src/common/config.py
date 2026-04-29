@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import os
@@ -14,7 +13,9 @@ DEFAULT_CONFIG_FILE = "config.yaml"
 
 @lru_cache(maxsize=4)
 def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
-    path = Path(config_path or os.getenv(DEFAULT_CONFIG_ENV) or DEFAULT_CONFIG_FILE).resolve()
+    path = Path(
+        config_path or os.getenv(DEFAULT_CONFIG_ENV) or DEFAULT_CONFIG_FILE
+    ).resolve()
     with path.open("r", encoding="utf-8") as handle:
         config = yaml.safe_load(handle) or {}
     config["_meta"] = {
@@ -24,7 +25,9 @@ def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
     return config
 
 
-def get_config_value(config: dict[str, Any], dotted_key: str, default: Any = None) -> Any:
+def get_config_value(
+    config: dict[str, Any], dotted_key: str, default: Any = None
+) -> Any:
     current: Any = config
     for part in dotted_key.split("."):
         if not isinstance(current, dict) or part not in current:

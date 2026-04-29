@@ -8,10 +8,10 @@ x-airflow-common: &airflow-common
     - .env
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
-    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
-    AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres/${AIRFLOW_DB_NAME}
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres/${AIRFLOW_DB_NAME}
+    AIRFLOW__CELERY__BROKER_URL: ${AIRFLOW__CELERY__BROKER_URL}
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
@@ -23,15 +23,15 @@ x-airflow-common: &airflow-common
     PYTHONPATH: /opt/airflow/project
     TRAINING_PYTHON: /opt/venvs/training/bin/python
     LOG_SERVICE_NAME: airflow
-    DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy_app
-    MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
+    DATABASE_URL: postgresql://${GALAXY_DB_USER}:${GALAXY_DB_PASSWORD}@postgres:5432/${GALAXY_DB_NAME}
+    MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://${MLFLOW_DB_USER}:${MLFLOW_DB_PASSWORD}@postgres:5432/${MLFLOW_DB_NAME}
     MLFLOW_TRACKING_URI: http://mlflow:5000
     DEPLOYMENT_GIT_COMMIT_SHA: ${DEPLOYMENT_GIT_COMMIT_SHA:-}
     APP_VERSION: ${APP_VERSION:-}
     CONTAINER_IMAGE: ${CONTAINER_IMAGE:-}
     CI_RUN_ID: ${CI_RUN_ID:-}
-    _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
-    _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
+    _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME}
+    _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD}
     _PIP_ADDITIONAL_REQUIREMENTS: ''
   volumes:
     - ./airflow/dags:/opt/airflow/dags
@@ -51,14 +51,14 @@ services:
     image: postgres:16
     env_file: [.env]
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "postgres"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -166,8 +166,8 @@ services:
     environment:
       APP_CONFIG_PATH: /app/config.yaml
       LOG_SERVICE_NAME: trainer
-      DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy_app
-      MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
+      DATABASE_URL: postgresql://${GALAXY_DB_USER}:${GALAXY_DB_PASSWORD}@postgres:5432/${GALAXY_DB_NAME}
+      MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://${MLFLOW_DB_USER}:${MLFLOW_DB_PASSWORD}@postgres:5432/${MLFLOW_DB_NAME}
       MLFLOW_TRACKING_URI: http://mlflow:5000
       DEPLOYMENT_GIT_COMMIT_SHA: ${DEPLOYMENT_GIT_COMMIT_SHA:-}
       APP_VERSION: ${APP_VERSION:-}
@@ -191,7 +191,7 @@ services:
     environment:
       APP_CONFIG_PATH: /app/config.yaml
       LOG_SERVICE_NAME: pipeline-exporter
-      DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy_app
+      DATABASE_URL: postgresql://${GALAXY_DB_USER}:${GALAXY_DB_PASSWORD}@postgres:5432/${GALAXY_DB_NAME}
     working_dir: /app
     volumes:
       - ./:/app
@@ -207,7 +207,7 @@ services:
     environment:
       APP_CONFIG_PATH: /app/config.yaml
       LOG_SERVICE_NAME: model-service
-      DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy_app
+      DATABASE_URL: postgresql://${GALAXY_DB_USER}:${GALAXY_DB_PASSWORD}@postgres:5432/${GALAXY_DB_NAME}
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MODEL_URI: models:/galaxy_morphology_classifier@champion
     working_dir: /app
@@ -232,7 +232,7 @@ services:
     environment:
       APP_CONFIG_PATH: /app/config.yaml
       LOG_SERVICE_NAME: api
-      DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy_app
+      DATABASE_URL: postgresql://${GALAXY_DB_USER}:${GALAXY_DB_PASSWORD}@postgres:5432/${GALAXY_DB_NAME}
     working_dir: /app
     volumes:
       - ./:/app
@@ -257,7 +257,7 @@ services:
     environment:
       APP_CONFIG_PATH: /app/config.yaml
       LOG_SERVICE_NAME: frontend
-      DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy_app
+      DATABASE_URL: postgresql://${GALAXY_DB_USER}:${GALAXY_DB_PASSWORD}@postgres:5432/${GALAXY_DB_NAME}
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MODEL_URI: models:/galaxy_morphology_classifier@champion
     working_dir: /app
@@ -275,7 +275,7 @@ services:
       dockerfile: mlflow_server/Dockerfile
     env_file: [.env]
     environment:
-      MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
+      MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://${MLFLOW_DB_USER}:${MLFLOW_DB_PASSWORD}@postgres:5432/${MLFLOW_DB_NAME}
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MLFLOW_SERVER_ALLOWED_HOSTS: ${MLFLOW_SERVER_ALLOWED_HOSTS:-mlflow,mlflow:5000,localhost,localhost:5000,127.0.0.1,127.0.0.1:5000}
     working_dir: /mlflow
@@ -287,7 +287,7 @@ services:
         "mlflow", "server",
         "--host", "0.0.0.0",
         "--port", "5000",
-        "--backend-store-uri", "postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow",
+        "--backend-store-uri", "postgresql+psycopg2://${MLFLOW_DB_USER}:${MLFLOW_DB_PASSWORD}@postgres:5432/${MLFLOW_DB_NAME}",
         "--artifacts-destination", "/mlflow/mlruns",
         "--serve-artifacts"
       ]

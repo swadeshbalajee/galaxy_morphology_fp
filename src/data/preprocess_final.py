@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import argparse
@@ -18,22 +17,32 @@ from src.features.baseline import save_baseline
 LOGGER = configure_logging("preprocess_final")
 
 
-def split_counts(total: int, train_ratio: float, val_ratio: float) -> tuple[int, int, int]:
+def split_counts(
+    total: int, train_ratio: float, val_ratio: float
+) -> tuple[int, int, int]:
     train_count = int(total * train_ratio)
     val_count = int(total * val_ratio)
     test_count = total - train_count - val_count
     return train_count, val_count, test_count
 
 
-def build_training_ready_dataset(source_dir: str | Path, output_dir: str | Path, seed: int | None = None) -> dict:
+def build_training_ready_dataset(
+    source_dir: str | Path, output_dir: str | Path, seed: int | None = None
+) -> dict:
     config = load_config()
     source_dir = Path(source_dir)
     output_dir = reset_dir(output_dir)
     validation = validate_dataset_layout(source_dir)
     if not validation.is_valid:
-        raise ValueError("Processed v1 validation failed: " + "; ".join(validation.issues))
+        raise ValueError(
+            "Processed v1 validation failed: " + "; ".join(validation.issues)
+        )
 
-    seed = int(seed if seed is not None else get_config_value(config, "project.random_seed", 42))
+    seed = int(
+        seed
+        if seed is not None
+        else get_config_value(config, "project.random_seed", 42)
+    )
     random.seed(seed)
     train_ratio = float(get_config_value(config, "data.train_split", 0.70))
     val_ratio = float(get_config_value(config, "data.val_split", 0.15))
@@ -48,11 +57,15 @@ def build_training_ready_dataset(source_dir: str | Path, output_dir: str | Path,
     for class_dir in class_dirs(source_dir):
         files = list_image_files(class_dir)
         random.shuffle(files)
-        train_count, val_count, test_count = split_counts(len(files), train_ratio, val_ratio)
+        train_count, val_count, test_count = split_counts(
+            len(files), train_ratio, val_ratio
+        )
         chunk_map = {
             "train": files[:train_count],
-            "val": files[train_count:train_count + val_count],
-            "test": files[train_count + val_count:train_count + val_count + test_count],
+            "val": files[train_count : train_count + val_count],
+            "test": files[
+                train_count + val_count : train_count + val_count + test_count
+            ],
         }
 
         for split_name, split_files in chunk_map.items():
@@ -61,12 +74,14 @@ def build_training_ready_dataset(source_dir: str | Path, output_dir: str | Path,
             for path in split_files:
                 destination = destination_class_dir / path.name
                 shutil.copy2(path, destination)
-                manifest_rows.append({
-                    "source_path": str(path),
-                    "destination_path": str(destination),
-                    "split": split_name,
-                    "label": class_dir.name,
-                })
+                manifest_rows.append(
+                    {
+                        "source_path": str(path),
+                        "destination_path": str(destination),
+                        "split": split_name,
+                        "label": class_dir.name,
+                    }
+                )
         LOGGER.info(
             "Final preprocessing complete for class=%s train=%s val=%s test=%s",
             class_dir.name,
@@ -78,11 +93,15 @@ def build_training_ready_dataset(source_dir: str | Path, output_dir: str | Path,
     artifacts_dir = resolve_path(config, "paths.artifacts_dir")
     manifest_path = artifacts_dir / "data_manifest.csv"
     with manifest_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["source_path", "destination_path", "split", "label"])
+        writer = csv.DictWriter(
+            handle, fieldnames=["source_path", "destination_path", "split", "label"]
+        )
         writer.writeheader()
         writer.writerows(manifest_rows)
 
-    baseline = save_baseline(output_dir / "train", resolve_path(config, "paths.drift_baseline_path"))
+    baseline = save_baseline(
+        output_dir / "train", resolve_path(config, "paths.drift_baseline_path")
+    )
     store_pipeline_artifact("drift_baseline", baseline, config=config, keep_local=True)
     summary = {
         "stage": "preprocess_final",
@@ -100,7 +119,9 @@ def build_training_ready_dataset(source_dir: str | Path, output_dir: str | Path,
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Create the final training-ready dataset version.")
+    parser = argparse.ArgumentParser(
+        description="Create the final training-ready dataset version."
+    )
     parser.add_argument("--source-dir", default=None)
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--seed", type=int, default=None)
