@@ -76,7 +76,11 @@ class PostgresLogHandler(logging.Handler):
             if conn is None:
                 return
             self._ensure_schema(conn)
-            exception = self.formatter.formatException(record.exc_info) if record.exc_info and self.formatter else None
+            exception = (
+                self.formatter.formatException(record.exc_info)
+                if record.exc_info and self.formatter
+                else None
+            )
             with conn.cursor() as cur:
                 cur.execute(
                     """

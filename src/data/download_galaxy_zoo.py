@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import argparse
@@ -79,7 +78,11 @@ def required_dataset_columns(cols: DatasetColumns) -> list[str]:
     return list(dict.fromkeys(value for value in asdict(cols).values() if value))
 
 
-def pick_column(columns: Iterable[str], required_terms: list[str], preferred_terms: list[str] | None = None) -> str | None:
+def pick_column(
+    columns: Iterable[str],
+    required_terms: list[str],
+    preferred_terms: list[str] | None = None,
+) -> str | None:
     preferred_terms = preferred_terms or []
     candidates: list[tuple[int, str]] = []
     for column in columns:
@@ -95,12 +98,16 @@ def pick_column(columns: Iterable[str], required_terms: list[str], preferred_ter
 
 def detect_columns(df: pd.DataFrame) -> DatasetColumns:
     columns = list(df.columns)
-    objid = next((c for c in ["dr7objid", "objid", "dr7_objid"] if c in df.columns), None)
+    objid = next(
+        (c for c in ["dr7objid", "objid", "dr7_objid"] if c in df.columns), None
+    )
     if objid is None:
         raise ValueError("Could not find objid column in labels table")
     preferred = ["debiased", "weighted_fraction", "wt_fraction", "fraction"]
     smooth = pick_column(columns, ["smooth_or_features", "smooth"], preferred)
-    features = pick_column(columns, ["smooth_or_features", "features_or_disk"], preferred)
+    features = pick_column(
+        columns, ["smooth_or_features", "features_or_disk"], preferred
+    )
     return DatasetColumns(
         objid=objid,
         smooth=smooth,
@@ -121,14 +128,18 @@ def read_labels_table(labels_path: Path) -> tuple[pd.DataFrame, DatasetColumns]:
     header = pd.read_csv(labels_path, compression="gzip", nrows=0)
     normalized_header = normalize_columns(header)
     cols = detect_columns(normalized_header)
-    raw_columns_by_name = {str(column).strip().lower(): column for column in header.columns}
+    raw_columns_by_name = {
+        str(column).strip().lower(): column for column in header.columns
+    }
     required_columns = required_dataset_columns(cols)
     labels = pd.read_csv(
         labels_path,
         compression="gzip",
         usecols=[raw_columns_by_name[column] for column in required_columns],
         dtype={
-            raw_columns_by_name[column]: ("int64" if column == cols.objid else "float32")
+            raw_columns_by_name[column]: (
+                "int64" if column == cols.objid else "float32"
+            )
             for column in required_columns
         },
         low_memory=False,
@@ -156,16 +167,24 @@ def read_mapping_table(mapping_path: Path) -> pd.DataFrame:
     return mapping.drop_duplicates(subset=["objid", "asset_id"]).reset_index(drop=True)
 
 
-def sample_per_class(df: pd.DataFrame, label_col: str, max_per_class: int | None, seed: int) -> pd.DataFrame:
+def sample_per_class(
+    df: pd.DataFrame, label_col: str, max_per_class: int | None, seed: int
+) -> pd.DataFrame:
     if max_per_class is None:
         return df
     chunks = []
     for _, group in df.groupby(label_col, sort=False):
-        chunks.append(group if len(group) <= max_per_class else group.sample(n=max_per_class, random_state=seed))
+        chunks.append(
+            group
+            if len(group) <= max_per_class
+            else group.sample(n=max_per_class, random_state=seed)
+        )
     return pd.concat(chunks, ignore_index=True) if chunks else df.head(0)
 
 
-def build_zip_member_index(zf: zipfile.ZipFile, include_filename_indexes: bool) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
+def build_zip_member_index(
+    zf: zipfile.ZipFile, include_filename_indexes: bool
+) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
     exact_index: dict[str, str] = {}
     basename_index: dict[str, str] = {}
     stem_index: dict[str, str] = {}
@@ -182,9 +201,13 @@ def build_zip_member_index(zf: zipfile.ZipFile, include_filename_indexes: bool) 
     return exact_index, basename_index, stem_index
 
 
-def write_images_from_zip(selected: pd.DataFrame, zip_path: Path, output_root: Path) -> dict[str, int]:
+def write_images_from_zip(
+    selected: pd.DataFrame, zip_path: Path, output_root: Path
+) -> dict[str, int]:
     counts: dict[str, int] = {}
-    filename_columns = [column for column in FILENAME_COLUMNS if column in selected.columns]
+    filename_columns = [
+        column for column in FILENAME_COLUMNS if column in selected.columns
+    ]
     with zipfile.ZipFile(zip_path, "r") as zf:
         exact_index, basename_index, stem_index = build_zip_member_index(
             zf,
@@ -198,7 +221,9 @@ def write_images_from_zip(selected: pd.DataFrame, zip_path: Path, output_root: P
                 for col in filename_columns
                 if col in row and pd.notna(row[col]) and str(row.get(col)).strip()
             ]
-            candidate_names.extend([f"{asset_id}.jpg", f"{asset_id}.jpeg", f"{asset_id}.png", asset_id])
+            candidate_names.extend(
+                [f"{asset_id}.jpg", f"{asset_id}.jpeg", f"{asset_id}.png", asset_id]
+            )
             archive_name = None
             for candidate in candidate_names:
                 if exact_index and candidate in exact_index:
@@ -234,17 +259,26 @@ def score_values(df: pd.DataFrame, column: str | None) -> np.ndarray:
 def prepare_score_arrays(df: pd.DataFrame, cols: DatasetColumns) -> ScoreArrays:
     return ScoreArrays(
         merger=score_values(df, cols.merger),
-        irregular=np.maximum(score_values(df, cols.irregular), score_values(df, cols.disturbed)),
+        irregular=np.maximum(
+            score_values(df, cols.irregular), score_values(df, cols.disturbed)
+        ),
         smooth=score_values(df, cols.smooth),
         features=score_values(df, cols.features),
         edgeon_no=score_values(df, cols.edgeon_no),
         spiral_yes=score_values(df, cols.spiral_yes),
         no_spiral=score_values(df, cols.no_spiral),
-        bulge_prom=np.maximum(score_values(df, cols.bulge_obvious), score_values(df, cols.bulge_dominant)),
+        bulge_prom=np.maximum(
+            score_values(df, cols.bulge_obvious), score_values(df, cols.bulge_dominant)
+        ),
     )
 
 
-def assign_labels_vectorized(scores: ScoreArrays, threshold: float, merger_threshold: float, bulge_threshold: float) -> np.ndarray:
+def assign_labels_vectorized(
+    scores: ScoreArrays,
+    threshold: float,
+    merger_threshold: float,
+    bulge_threshold: float,
+) -> np.ndarray:
     labels = np.full(scores.smooth.shape[0], "", dtype=object)
     assigned = np.zeros(scores.smooth.shape[0], dtype=bool)
 
@@ -256,7 +290,9 @@ def assign_labels_vectorized(scores: ScoreArrays, threshold: float, merger_thres
     labels[irregular_mask] = "irregular"
     assigned |= irregular_mask
 
-    elliptical_mask = (~assigned) & (scores.smooth >= threshold) & (scores.smooth >= scores.features)
+    elliptical_mask = (
+        (~assigned) & (scores.smooth >= threshold) & (scores.smooth >= scores.features)
+    )
     labels[elliptical_mask] = "elliptical"
     assigned |= elliptical_mask
 
@@ -280,8 +316,12 @@ def assign_labels_vectorized(scores: ScoreArrays, threshold: float, merger_thres
     return labels
 
 
-def summarize_class_counts(labels: np.ndarray, classes: list[str], max_per_class: int | None) -> tuple[dict[str, int], dict[str, int]]:
-    eligible_counts = {label: int(np.count_nonzero(labels == label)) for label in classes}
+def summarize_class_counts(
+    labels: np.ndarray, classes: list[str], max_per_class: int | None
+) -> tuple[dict[str, int], dict[str, int]]:
+    eligible_counts = {
+        label: int(np.count_nonzero(labels == label)) for label in classes
+    }
     sampled_counts = {
         label: (min(count, max_per_class) if max_per_class is not None else count)
         for label, count in eligible_counts.items()
@@ -289,7 +329,9 @@ def summarize_class_counts(labels: np.ndarray, classes: list[str], max_per_class
     return eligible_counts, sampled_counts
 
 
-def materialize_selection(merged: pd.DataFrame, labels: np.ndarray, max_per_class: int | None, seed: int) -> pd.DataFrame:
+def materialize_selection(
+    merged: pd.DataFrame, labels: np.ndarray, max_per_class: int | None, seed: int
+) -> pd.DataFrame:
     selected_mask = labels != ""
     if not np.any(selected_mask):
         return merged.head(0).assign(label=pd.Series(dtype="object"))
@@ -298,8 +340,12 @@ def materialize_selection(merged: pd.DataFrame, labels: np.ndarray, max_per_clas
     return sample_per_class(selected, "label", max_per_class=max_per_class, seed=seed)
 
 
-def choose_thresholds(merged: pd.DataFrame, cols: DatasetColumns, classes: list[str], config: dict) -> tuple[pd.DataFrame, dict]:
-    target_per_class = int(get_config_value(config, "data.target_images_per_class", 1000))
+def choose_thresholds(
+    merged: pd.DataFrame, cols: DatasetColumns, classes: list[str], config: dict
+) -> tuple[pd.DataFrame, dict]:
+    target_per_class = int(
+        get_config_value(config, "data.target_images_per_class", 1000)
+    )
     max_per_class = int(get_config_value(config, "data.max_images_per_class", 1000))
     seed = int(get_config_value(config, "data.sampling_seed", 42))
     threshold_start = float(get_config_value(config, "data.threshold_start", 0.8))
@@ -307,8 +353,12 @@ def choose_thresholds(merged: pd.DataFrame, cols: DatasetColumns, classes: list[
     threshold_step = float(get_config_value(config, "data.threshold_step", 0.05))
     merger_start = float(get_config_value(config, "data.merger_threshold_start", 0.6))
     merger_min = float(get_config_value(config, "data.merger_threshold_min", 0.3))
-    bulge_start = float(get_config_value(config, "data.lenticular_bulge_threshold_start", 0.25))
-    bulge_min = float(get_config_value(config, "data.lenticular_bulge_threshold_min", 0.05))
+    bulge_start = float(
+        get_config_value(config, "data.lenticular_bulge_threshold_start", 0.25)
+    )
+    bulge_min = float(
+        get_config_value(config, "data.lenticular_bulge_threshold_min", 0.05)
+    )
 
     scores = prepare_score_arrays(merged, cols)
     best_labels = np.full(len(merged), "", dtype=object)
@@ -324,8 +374,12 @@ def choose_thresholds(merged: pd.DataFrame, cols: DatasetColumns, classes: list[
     while threshold >= threshold_min - 1e-9:
         merger_threshold = max(merger_min, merger_start - (threshold_start - threshold))
         bulge_threshold = max(bulge_min, bulge_start - (threshold_start - threshold))
-        labels = assign_labels_vectorized(scores, threshold, merger_threshold, bulge_threshold)
-        eligible_counts, class_counts = summarize_class_counts(labels, classes, max_per_class=max_per_class)
+        labels = assign_labels_vectorized(
+            scores, threshold, merger_threshold, bulge_threshold
+        )
+        eligible_counts, class_counts = summarize_class_counts(
+            labels, classes, max_per_class=max_per_class
+        )
         LOGGER.info(
             "Threshold search candidate threshold=%.2f merger=%.2f bulge=%.2f eligible=%s sampled=%s",
             threshold,
@@ -334,7 +388,9 @@ def choose_thresholds(merged: pd.DataFrame, cols: DatasetColumns, classes: list[
             eligible_counts,
             class_counts,
         )
-        if min(class_counts.values()) > min(best_meta.get("class_counts", {c: 0 for c in classes}).values()):
+        if min(class_counts.values()) > min(
+            best_meta.get("class_counts", {c: 0 for c in classes}).values()
+        ):
             best_labels = labels.copy()
             best_meta = {
                 "threshold": threshold,
@@ -344,7 +400,9 @@ def choose_thresholds(merged: pd.DataFrame, cols: DatasetColumns, classes: list[
                 "eligible_class_counts": eligible_counts,
             }
         if all(class_counts.get(label, 0) >= target_per_class for label in classes):
-            return materialize_selection(merged, labels, max_per_class=max_per_class, seed=seed), {
+            return materialize_selection(
+                merged, labels, max_per_class=max_per_class, seed=seed
+            ), {
                 "threshold": threshold,
                 "merger_threshold": merger_threshold,
                 "bulge_threshold": bulge_threshold,
@@ -352,8 +410,16 @@ def choose_thresholds(merged: pd.DataFrame, cols: DatasetColumns, classes: list[
                 "eligible_class_counts": eligible_counts,
             }
         threshold = round(threshold - threshold_step, 4)
-    LOGGER.warning("Target per-class count not reached for all classes. Using best candidate=%s", best_meta)
-    return materialize_selection(merged, best_labels, max_per_class=max_per_class, seed=seed), best_meta
+    LOGGER.warning(
+        "Target per-class count not reached for all classes. Using best candidate=%s",
+        best_meta,
+    )
+    return (
+        materialize_selection(
+            merged, best_labels, max_per_class=max_per_class, seed=seed
+        ),
+        best_meta,
+    )
 
 
 def build_dataset(output_root: Path, cache_dir: Path) -> dict:
@@ -379,7 +445,9 @@ def build_dataset(output_root: Path, cache_dir: Path) -> dict:
 
     selected, chosen = choose_thresholds(merged, cols, classes, config)
     counts = write_images_from_zip(selected, images_zip, output_root)
-    actual_counts = {label: len(list((output_root / label).glob("*"))) for label in classes}
+    actual_counts = {
+        label: len(list((output_root / label).glob("*"))) for label in classes
+    }
     summary = {
         "stage": "fetch_raw",
         "status": "success",
@@ -387,7 +455,9 @@ def build_dataset(output_root: Path, cache_dir: Path) -> dict:
         "output_root": str(output_root),
         "cache_dir": str(cache_dir),
         "selected_rows": int(len(selected)),
-        "requested_max_per_class": int(get_config_value(config, "data.max_images_per_class", 1000)),
+        "requested_max_per_class": int(
+            get_config_value(config, "data.max_images_per_class", 1000)
+        ),
         "threshold_search": chosen,
         "written_counts": counts,
         "actual_counts": actual_counts,
@@ -400,7 +470,9 @@ def build_dataset(output_root: Path, cache_dir: Path) -> dict:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Download and materialize the Galaxy Zoo dataset subset for this project.")
+    parser = argparse.ArgumentParser(
+        description="Download and materialize the Galaxy Zoo dataset subset for this project."
+    )
     parser.add_argument("--output-root", default=None)
     parser.add_argument("--cache-dir", default=None)
     return parser.parse_args()
@@ -409,8 +481,16 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = parse_args()
     cfg = load_config()
-    output = Path(args.output_root) if args.output_root else resolve_path(cfg, "paths.raw_dataset_dir")
-    cache = Path(args.cache_dir) if args.cache_dir else resolve_path(cfg, "paths.raw_cache_dir")
+    output = (
+        Path(args.output_root)
+        if args.output_root
+        else resolve_path(cfg, "paths.raw_dataset_dir")
+    )
+    cache = (
+        Path(args.cache_dir)
+        if args.cache_dir
+        else resolve_path(cfg, "paths.raw_cache_dir")
+    )
     try:
         result = build_dataset(output, cache)
         print(json.dumps(result, indent=2))

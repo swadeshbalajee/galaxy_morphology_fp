@@ -49,8 +49,12 @@ class GalaxyPredictor:
                 transforms.Resize((image_size, image_size)),
                 transforms.ToTensor(),
                 transforms.Normalize(
-                    get_config_value(self.config, "data.normalize_mean", [0.485, 0.456, 0.406]),
-                    get_config_value(self.config, "data.normalize_std", [0.229, 0.224, 0.225]),
+                    get_config_value(
+                        self.config, "data.normalize_mean", [0.485, 0.456, 0.406]
+                    ),
+                    get_config_value(
+                        self.config, "data.normalize_std", [0.229, 0.224, 0.225]
+                    ),
                 ),
             ]
         )
@@ -80,7 +84,9 @@ class GalaxyPredictor:
         if tracking_uri:
             mlflow.set_tracking_uri(tracking_uri)
 
-    def _parse_registry_uri(self, uri: str) -> tuple[str | None, str | None, str | None]:
+    def _parse_registry_uri(
+        self, uri: str
+    ) -> tuple[str | None, str | None, str | None]:
         """
         Returns: (model_name, alias, version)
 
@@ -103,7 +109,9 @@ class GalaxyPredictor:
 
         return tail, None, None
 
-    def _resolve_serving_metadata(self, candidate_uri: str) -> tuple[str | None, str | None, str | None]:
+    def _resolve_serving_metadata(
+        self, candidate_uri: str
+    ) -> tuple[str | None, str | None, str | None]:
         model_name, model_alias, model_version = self._parse_registry_uri(candidate_uri)
 
         if model_name and model_alias:
@@ -153,7 +161,9 @@ class GalaxyPredictor:
                 if not self.class_names:
                     raise RuntimeError(f"class_names.json missing under {model_path}")
 
-                model_name, model_alias, model_version = self._resolve_serving_metadata(candidate_uri)
+                model_name, model_alias, model_version = self._resolve_serving_metadata(
+                    candidate_uri
+                )
                 self.active_model_source = candidate_uri
                 self.active_model_name = model_name
                 self.active_model_alias = model_alias
@@ -195,14 +205,18 @@ class GalaxyPredictor:
             image.width * image.height
         )
         baseline_std = self.baseline.get("brightness_std", 1.0) or 1.0
-        brightness_zscore = (brightness - self.baseline.get("brightness_mean", 0.0)) / baseline_std
+        brightness_zscore = (
+            brightness - self.baseline.get("brightness_mean", 0.0)
+        ) / baseline_std
 
         tensor = self.transform(image.convert("RGB")).unsqueeze(0).to(self.device)
         start = time.perf_counter()
         with torch.no_grad():
             logits = self.model(tensor)
             probabilities = torch.softmax(logits, dim=1)[0]
-            values, indices = torch.topk(probabilities, k=min(top_k, len(self.class_names)))
+            values, indices = torch.topk(
+                probabilities, k=min(top_k, len(self.class_names))
+            )
         latency_ms = (time.perf_counter() - start) * 1000
 
         top_predictions = [
@@ -213,9 +227,10 @@ class GalaxyPredictor:
         result = {
             "predicted_label": top_predictions[0]["label"],
             "top_k": top_predictions,
-            "model_version": self.active_model_version or "unknown",   # <-- numeric version now
-            "model_alias": self.active_model_alias,                    # optional, useful for UI/debug
-            "model_source": self.active_model_source,                  # optional, useful for UI/debug
+            "model_version": self.active_model_version
+            or "unknown",  # <-- numeric version now
+            "model_alias": self.active_model_alias,  # optional, useful for UI/debug
+            "model_source": self.active_model_source,  # optional, useful for UI/debug
             "latency_ms": latency_ms,
             "brightness_zscore": float(brightness_zscore),
         }

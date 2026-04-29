@@ -67,7 +67,7 @@ data:
   train_split: 0.70
   val_split: 0.15
   test_split: 0.15
-  max_images_per_class: 100
+  max_images_per_class: 150
   target_images_per_class: 100
   min_required_class_count: 5
   allowed_suffixes: [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
@@ -112,6 +112,7 @@ reporting:
 
 email:
   enabled: true
+  email_on_failure: true
   connection_id: smtp_default
   sender: ""
   recipients:

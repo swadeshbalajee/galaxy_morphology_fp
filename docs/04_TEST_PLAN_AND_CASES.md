@@ -19,6 +19,7 @@ flowchart TB
 | `tests/unit/test_metrics.py` | Drift baseline behavior |
 | `tests/unit/test_live_feedback_metrics.py` | Live feedback metric calculation |
 | `tests/unit/test_config_contracts.py` | Config contract expectations |
+| `tests/unit/test_airflow_retraining_flow.py` | Airflow provenance, DVC push policy, model validation gates, failure-email callback wiring |
 | `tests/integration/test_health_contracts.py` | API `/health` contract |
 
 ## Functional Test Cases
@@ -26,7 +27,7 @@ flowchart TB
 | ID | Case | Expected result |
 |---|---|---|
 | F-01 | Run `dvc dag` | DVC graph renders without errors |
-| F-02 | Run `dvc repro report` | Raw, processed, model, metrics, and reports are generated |
+| F-02 | Run `dvc repro evaluate report` | Raw, processed, model, metrics, evaluation, and reports are generated |
 | F-03 | Open Streamlit frontend | UI loads at `http://localhost:8501` |
 | F-04 | Upload one image | Prediction stored in Postgres and shown in UI |
 | F-05 | Upload ZIP batch | Batch row and prediction rows are stored |
@@ -54,7 +55,8 @@ flowchart TD
   Validate -->|Fail| Reject[Persist rejection]
   Promote --> Reload[Reload model service]
   Reject --> Email
-  Skip --> Email[Send latest report]
+  Skip --> Refresh[Refresh DVC report]
+  Refresh --> Email[Send annotated report]
   Reload --> Email
 ```
 
@@ -64,11 +66,12 @@ flowchart TD
 | A-02 | Model missing | DAG branches to `run_dvc_pipeline` |
 | A-03 | New feedback reaches threshold | DAG materializes feedback and runs DVC |
 | A-04 | Metrics below threshold | DAG runs DVC |
-| A-05 | Healthy state | DAG branches to `skip_retraining` and still emails report |
+| A-05 | Healthy state | DAG branches to `skip_retraining`, refreshes the DVC report, and still emails the annotated report |
 | A-06 | Registry step completes | Candidate model is registered and registry status stored |
-| A-07 | Candidate fails validation | DAG stores rejected validation status and emails runtime report without reloading model service |
+| A-07 | Candidate fails validation | DAG stores rejected validation status and emails the annotated DVC report without reloading model service |
 | A-08 | Candidate passes validation but does not beat champion | DAG keeps current champion and emails the final registry decision |
 | A-09 | Deployment metadata supplied | MLflow run has `deployment.*` tags and provenance JSON contains deployment fields |
+| A-10 | Task fails while failure email is enabled | DAG failure callback sends email through `smtp_default` rather than Airflow's native localhost SMTP path |
 
 ## Observability Test Cases
 
@@ -81,6 +84,7 @@ flowchart TD
 | O-05 | Open Grafana | Dashboard datasource provisioning works |
 | O-06 | Open Loki ready endpoint | Loki is ready and Promtail can push logs |
 | O-07 | Fire alert condition | Alertmanager sends email through configured SMTP |
+| O-08 | Trigger Airflow task failure | Airflow sends failure notification through configured `smtp_default` connection |
 
 ## Manual Proof Checklist
 

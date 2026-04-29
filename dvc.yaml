@@ -1,6 +1,6 @@
 stages:
   fetch_raw:
-    cmd: /opt/venvs/training/bin/python -m src.data.download_galaxy_zoo
+    cmd: python -m src.data.download_galaxy_zoo
     deps:
       - src/data/download_galaxy_zoo.py
       - src/common/artifact_store.py
@@ -12,7 +12,7 @@ stages:
       - data/raw/galaxy_dataset
 
   preprocess_v1:
-    cmd: /opt/venvs/training/bin/python -m src.data.preprocess_v1
+    cmd: python -m src.data.preprocess_v1
     deps:
       - src/data/preprocess_v1.py
       - src/data/validate.py
@@ -26,7 +26,7 @@ stages:
       - data/processed/v1
 
   preprocess_final:
-    cmd: /opt/venvs/training/bin/python -m src.data.preprocess_final
+    cmd: python -m src.data.preprocess_final
     deps:
       - src/data/preprocess_final.py
       - src/data/validate.py
@@ -43,7 +43,7 @@ stages:
       - artifacts/drift_baseline.json
 
   train:
-    cmd: /opt/venvs/training/bin/python -m src.training.train
+    cmd: python -m src.training.train
     deps:
       - src/training/train.py
       - src/training/model_def.py
@@ -61,7 +61,7 @@ stages:
       - artifacts/confusion_matrix.csv
 
   evaluate:
-    cmd: /opt/venvs/training/bin/python -m src.training.evaluate
+    cmd: python -m src.training.evaluate
     deps:
       - src/training/evaluate.py
       - src/common/artifact_store.py
@@ -74,7 +74,7 @@ stages:
     always_changed: true
 
   report:
-    cmd: /opt/venvs/training/bin/python -m src.reporting.generate_report
+    cmd: python -m src.reporting.generate_report
     deps:
       - src/reporting/generate_report.py
       - src/training/evaluate.py

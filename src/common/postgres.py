@@ -17,16 +17,22 @@ LOGGER = configure_logging("postgres")
 
 def get_database_url(config: dict | None = None) -> str:
     cfg = config or load_config()
-    env_name = get_config_value(cfg, 'database.app_url_env', 'DATABASE_URL')
-    url = os.getenv(env_name) or get_config_value(cfg, 'database.app_url')
+    env_name = get_config_value(cfg, "database.app_url_env", "DATABASE_URL")
+    url = os.getenv(env_name) or get_config_value(cfg, "database.app_url")
     if not url:
-        raise RuntimeError(f'Database URL is not configured. Expected env var {env_name} or config database.app_url.')
+        raise RuntimeError(
+            f"Database URL is not configured. Expected env var {env_name} or config database.app_url."
+        )
     return str(url)
 
 
 @contextmanager
-def get_db_connection(row_factory=dict_row, autocommit: bool = True) -> Iterator[psycopg.Connection]:
-    conn = psycopg.connect(get_database_url(), row_factory=row_factory, autocommit=autocommit)
+def get_db_connection(
+    row_factory=dict_row, autocommit: bool = True
+) -> Iterator[psycopg.Connection]:
+    conn = psycopg.connect(
+        get_database_url(), row_factory=row_factory, autocommit=autocommit
+    )
     try:
         yield conn
     finally:
@@ -177,39 +183,43 @@ def initialize_database() -> None:
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(SCHEMA_SQL)
-            cur.execute('ANALYZE prediction_batches;')
-            cur.execute('ANALYZE predictions;')
-            cur.execute('ANALYZE feedback_uploads;')
-            cur.execute('ANALYZE feedback_corrections;')
-            cur.execute('ANALYZE control_plane_state;')
-            cur.execute('ANALYZE pipeline_artifact_snapshots;')
-            cur.execute('ANALYZE service_logs;')
+            cur.execute("ANALYZE prediction_batches;")
+            cur.execute("ANALYZE predictions;")
+            cur.execute("ANALYZE feedback_uploads;")
+            cur.execute("ANALYZE feedback_corrections;")
+            cur.execute("ANALYZE control_plane_state;")
+            cur.execute("ANALYZE pipeline_artifact_snapshots;")
+            cur.execute("ANALYZE service_logs;")
         ensure_pipeline_artifact_partition(conn, date.today())
         ensure_pipeline_artifact_partition(conn, date.today() + timedelta(days=31))
-    LOGGER.info('Postgres schema initialized successfully.')
+    LOGGER.info("Postgres schema initialized successfully.")
 
 
 def cluster_table(table_name: str, index_name: str) -> None:
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(f'CLUSTER {table_name} USING {index_name};')
-            cur.execute(f'ANALYZE {table_name};')
-    LOGGER.info('Clustered table=%s using index=%s', table_name, index_name)
+            cur.execute(f"CLUSTER {table_name} USING {index_name};")
+            cur.execute(f"ANALYZE {table_name};")
+    LOGGER.info("Clustered table=%s using index=%s", table_name, index_name)
 
 
-def ensure_pipeline_artifact_partition(conn: psycopg.Connection, for_date: date | datetime | None = None) -> str:
-    target = for_date.date() if isinstance(for_date, datetime) else (for_date or date.today())
+def ensure_pipeline_artifact_partition(
+    conn: psycopg.Connection, for_date: date | datetime | None = None
+) -> str:
+    target = (
+        for_date.date()
+        if isinstance(for_date, datetime)
+        else (for_date or date.today())
+    )
     month_start = target.replace(day=1)
     next_month = (month_start + timedelta(days=32)).replace(day=1)
-    partition_name = f'pipeline_artifact_snapshots_{month_start:%Y%m}'
+    partition_name = f"pipeline_artifact_snapshots_{month_start:%Y%m}"
     with conn.cursor() as cur:
-        statement = sql.SQL(
-            """
+        statement = sql.SQL("""
             CREATE TABLE IF NOT EXISTS {partition_name}
             PARTITION OF pipeline_artifact_snapshots
             FOR VALUES FROM ({month_start}) TO ({next_month})
-            """
-        ).format(
+            """).format(
             partition_name=sql.Identifier(partition_name),
             month_start=sql.Literal(month_start),
             next_month=sql.Literal(next_month),
@@ -221,36 +231,48 @@ def ensure_pipeline_artifact_partition(conn: psycopg.Connection, for_date: date 
 def _serialize_timestamp(value: datetime | str | None) -> str | None:
     if value is None or isinstance(value, str):
         return value
-    return value.isoformat().replace('+00:00', 'Z')
+    return value.isoformat().replace("+00:00", "Z")
 
 
 def _normalize_control_plane_state(row: Mapping[str, Any] | None) -> dict[str, Any]:
     if not row:
         return {
-            'last_feedback_snapshot_count': 0,
-            'last_feedback_snapshot_at': None,
-            'last_report_sent_at': None,
-            'last_pipeline_config_fingerprint': None,
-            'last_pipeline_config_updated_at': None,
-            'updated_at': None,
+            "last_feedback_snapshot_count": 0,
+            "last_feedback_snapshot_at": None,
+            "last_report_sent_at": None,
+            "last_pipeline_config_fingerprint": None,
+            "last_pipeline_config_updated_at": None,
+            "updated_at": None,
         }
     return {
-        'last_feedback_snapshot_count': int(row.get('last_feedback_snapshot_count') or 0),
-        'last_feedback_snapshot_at': _serialize_timestamp(row.get('last_feedback_snapshot_at')),
-        'last_report_sent_at': _serialize_timestamp(row.get('last_report_sent_at')),
-        'last_pipeline_config_fingerprint': row.get('last_pipeline_config_fingerprint'),
-        'last_pipeline_config_updated_at': _serialize_timestamp(row.get('last_pipeline_config_updated_at')),
-        'updated_at': _serialize_timestamp(row.get('updated_at')),
+        "last_feedback_snapshot_count": int(
+            row.get("last_feedback_snapshot_count") or 0
+        ),
+        "last_feedback_snapshot_at": _serialize_timestamp(
+            row.get("last_feedback_snapshot_at")
+        ),
+        "last_report_sent_at": _serialize_timestamp(row.get("last_report_sent_at")),
+        "last_pipeline_config_fingerprint": row.get("last_pipeline_config_fingerprint"),
+        "last_pipeline_config_updated_at": _serialize_timestamp(
+            row.get("last_pipeline_config_updated_at")
+        ),
+        "updated_at": _serialize_timestamp(row.get("updated_at")),
     }
 
 
-def get_control_plane_state(default_state: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def get_control_plane_state(
+    default_state: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     initial_state = default_state or {}
-    initial_count = int(initial_state.get('last_feedback_snapshot_count') or 0)
-    initial_snapshot_at = initial_state.get('last_feedback_snapshot_at')
-    initial_report_sent_at = initial_state.get('last_report_sent_at')
-    initial_pipeline_config_fingerprint = initial_state.get('last_pipeline_config_fingerprint')
-    initial_pipeline_config_updated_at = initial_state.get('last_pipeline_config_updated_at')
+    initial_count = int(initial_state.get("last_feedback_snapshot_count") or 0)
+    initial_snapshot_at = initial_state.get("last_feedback_snapshot_at")
+    initial_report_sent_at = initial_state.get("last_report_sent_at")
+    initial_pipeline_config_fingerprint = initial_state.get(
+        "last_pipeline_config_fingerprint"
+    )
+    initial_pipeline_config_updated_at = initial_state.get(
+        "last_pipeline_config_updated_at"
+    )
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
@@ -275,8 +297,7 @@ def get_control_plane_state(default_state: Mapping[str, Any] | None = None) -> d
                     initial_pipeline_config_updated_at,
                 ),
             )
-            cur.execute(
-                """
+            cur.execute("""
                 SELECT
                     last_feedback_snapshot_count,
                     last_feedback_snapshot_at,
@@ -286,8 +307,7 @@ def get_control_plane_state(default_state: Mapping[str, Any] | None = None) -> d
                     updated_at
                 FROM control_plane_state
                 WHERE state_id = 1
-                """
-            )
+                """)
             row = cur.fetchone()
     return _normalize_control_plane_state(row)
 
@@ -302,13 +322,11 @@ def update_control_plane_state(
 ) -> dict[str, Any]:
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
+            cur.execute("""
                 INSERT INTO control_plane_state (state_id)
                 VALUES (1)
                 ON CONFLICT (state_id) DO NOTHING
-                """
-            )
+                """)
             cur.execute(
                 """
                 UPDATE control_plane_state

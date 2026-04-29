@@ -42,7 +42,7 @@ groups:
           description: The latest input brightness drift z-score stayed above 3 for two minutes.
 
       - alert: GalaxyLiveAccuracyLow
-        expr: (galaxy_live_feedback_accuracy < 0.85) and on(job, instance) (galaxy_live_prediction_count >= 10)
+        expr: (galaxy_live_feedback_accuracy < 0.5) and on(job, instance) (galaxy_live_prediction_count >= 10)
         for: 5m
         labels:
           severity: warning

@@ -53,7 +53,7 @@ mindmap
 | Database-backed application state | Done | `src/common/postgres.py` |
 | Pipeline artifact snapshots in database | Done | `pipeline_artifact_snapshots`, `latest_pipeline_artifact_snapshots` |
 | Runtime orchestration | Done | `airflow/dags/galaxy_pipeline.py` |
-| Generated reports | Done | DVC pipeline report: `src/reporting/generate_report.py`, `artifacts/reports/latest_report.*`; Airflow runtime report: `src/reporting/generate_runtime_report.py`, `artifacts/runtime/latest_runtime_report.*` |
+| Generated reports | Done | DVC pipeline report: `src/reporting/generate_report.py`, `artifacts/reports/latest_report.*`; Airflow annotated email copy: `artifacts/runtime/latest_runtime_report.*` |
 | Email delivery | Done | Airflow SMTP hook, Alertmanager SMTP config |
 | Metrics | Done | `/metrics` mounts and `src/monitoring/pipeline_exporter.py` |
 | Dashboards | Done | `monitoring/grafana/dashboards/galaxy_mlops_dashboard.json` |
@@ -79,4 +79,4 @@ flowchart LR
 |---|---|---|
 | Proof screenshots are manual | Final submission needs captured evidence | Save screenshots in `image/proof/` after deployment |
 | Large images and model files remain filesystem artifacts | Avoids bloating Postgres | DVC and mounted volumes preserve reproducibility |
-| Latest report PDF is manually supplied | Markdown/HTML reports are generated automatically | Keep `report.pdf` at root, DVC reports under `artifacts/reports/`, and runtime email reports under `artifacts/runtime/` |
+| Latest report PDF is manually supplied | Markdown/HTML reports are generated automatically | Keep `report.pdf` at root, canonical DVC reports under `artifacts/reports/`, and Airflow-annotated email copies under `artifacts/runtime/` |

@@ -12,9 +12,13 @@ from psycopg.types.json import Jsonb
 from src.common.config import load_config, resolve_path
 from src.common.io_utils import read_json
 from src.common.logging_utils import configure_logging
-from src.common.postgres import ensure_pipeline_artifact_partition, get_db_connection, initialize_database
+from src.common.postgres import (
+    ensure_pipeline_artifact_partition,
+    get_db_connection,
+    initialize_database,
+)
 
-LOGGER = configure_logging('artifact_store')
+LOGGER = configure_logging("artifact_store")
 _MISSING = object()
 
 
@@ -26,18 +30,45 @@ class ArtifactSpec:
 
 
 ARTIFACT_SPECS: dict[str, ArtifactSpec] = {
-    'raw_summary': ArtifactSpec(stage_name='fetch_raw', path_key='paths.raw_summary_path'),
-    'processed_v1_summary': ArtifactSpec(stage_name='preprocess_v1', path_key='paths.processed_v1_summary_path'),
-    'processed_final_summary': ArtifactSpec(stage_name='preprocess_final', path_key='paths.processed_final_summary_path'),
-    'drift_baseline': ArtifactSpec(stage_name='preprocess_final', path_key='paths.drift_baseline_path', keep_local=True),
-    'feedback_training_summary': ArtifactSpec(stage_name='materialize_feedback_training', path_key='paths.feedback_training_summary_path'),
-    'train_metrics': ArtifactSpec(stage_name='train', path_key='paths.train_metrics_path'),
-    'validation_metrics': ArtifactSpec(stage_name='train', path_key='paths.validation_metrics_path'),
-    'classification_report': ArtifactSpec(stage_name='train', path_key='paths.classification_report_path'),
-    'pipeline_runtime_summary': ArtifactSpec(stage_name='train', path_key='paths.pipeline_runtime_summary_path'),
-    'test_metrics': ArtifactSpec(stage_name='evaluate', path_key='paths.test_metrics_path'),
-    'live_metrics': ArtifactSpec(stage_name='evaluate', path_key='paths.live_metrics_path'),
-    'registry_status': ArtifactSpec(stage_name='register_best_model', path_key='paths.registry_status_path'),
+    "raw_summary": ArtifactSpec(
+        stage_name="fetch_raw", path_key="paths.raw_summary_path"
+    ),
+    "processed_v1_summary": ArtifactSpec(
+        stage_name="preprocess_v1", path_key="paths.processed_v1_summary_path"
+    ),
+    "processed_final_summary": ArtifactSpec(
+        stage_name="preprocess_final", path_key="paths.processed_final_summary_path"
+    ),
+    "drift_baseline": ArtifactSpec(
+        stage_name="preprocess_final",
+        path_key="paths.drift_baseline_path",
+        keep_local=True,
+    ),
+    "feedback_training_summary": ArtifactSpec(
+        stage_name="materialize_feedback_training",
+        path_key="paths.feedback_training_summary_path",
+    ),
+    "train_metrics": ArtifactSpec(
+        stage_name="train", path_key="paths.train_metrics_path"
+    ),
+    "validation_metrics": ArtifactSpec(
+        stage_name="train", path_key="paths.validation_metrics_path"
+    ),
+    "classification_report": ArtifactSpec(
+        stage_name="train", path_key="paths.classification_report_path"
+    ),
+    "pipeline_runtime_summary": ArtifactSpec(
+        stage_name="train", path_key="paths.pipeline_runtime_summary_path"
+    ),
+    "test_metrics": ArtifactSpec(
+        stage_name="evaluate", path_key="paths.test_metrics_path"
+    ),
+    "live_metrics": ArtifactSpec(
+        stage_name="evaluate", path_key="paths.live_metrics_path"
+    ),
+    "registry_status": ArtifactSpec(
+        stage_name="register_best_model", path_key="paths.registry_status_path"
+    ),
 }
 
 
@@ -45,17 +76,25 @@ def _normalize_recorded_at(recorded_at: str | datetime | None = None) -> datetim
     if recorded_at is None:
         return datetime.now(timezone.utc)
     if isinstance(recorded_at, datetime):
-        return recorded_at.astimezone(timezone.utc) if recorded_at.tzinfo else recorded_at.replace(tzinfo=timezone.utc)
-    normalized = str(recorded_at).strip().replace('Z', '+00:00')
+        return (
+            recorded_at.astimezone(timezone.utc)
+            if recorded_at.tzinfo
+            else recorded_at.replace(tzinfo=timezone.utc)
+        )
+    normalized = str(recorded_at).strip().replace("Z", "+00:00")
     parsed = datetime.fromisoformat(normalized)
-    return parsed.astimezone(timezone.utc) if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    return (
+        parsed.astimezone(timezone.utc)
+        if parsed.tzinfo
+        else parsed.replace(tzinfo=timezone.utc)
+    )
 
 
 def _artifact_spec(artifact_key: str) -> ArtifactSpec:
     try:
         return ARTIFACT_SPECS[artifact_key]
     except KeyError as exc:  # noqa: PERF203
-        raise KeyError(f'Unknown pipeline artifact key: {artifact_key}') from exc
+        raise KeyError(f"Unknown pipeline artifact key: {artifact_key}") from exc
 
 
 def _artifact_path(config: dict, artifact_key: str) -> Path | None:
@@ -67,7 +106,7 @@ def _artifact_path(config: dict, artifact_key: str) -> Path | None:
 
 def _write_local_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2), encoding='utf-8')
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 def store_pipeline_artifact(
@@ -142,10 +181,12 @@ def load_pipeline_artifact(
                     (artifact_key,),
                 )
                 row = cur.fetchone()
-        if row and row.get('payload', _MISSING) is not _MISSING:
-            return row['payload']
+        if row and row.get("payload", _MISSING) is not _MISSING:
+            return row["payload"]
     except Exception as exc:  # noqa: BLE001
-        LOGGER.warning('Unable to read pipeline artifact=%s from Postgres: %s', artifact_key, exc)
+        LOGGER.warning(
+            "Unable to read pipeline artifact=%s from Postgres: %s", artifact_key, exc
+        )
 
     if not fallback_to_local:
         return default
@@ -161,7 +202,11 @@ def load_pipeline_artifact(
     try:
         store_pipeline_artifact(artifact_key, payload, config=cfg)
     except Exception as exc:  # noqa: BLE001
-        LOGGER.warning('Unable to bootstrap artifact=%s from local JSON into Postgres: %s', artifact_key, exc)
+        LOGGER.warning(
+            "Unable to bootstrap artifact=%s from local JSON into Postgres: %s",
+            artifact_key,
+            exc,
+        )
 
     return payload
 

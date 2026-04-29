@@ -13,7 +13,7 @@ flowchart TB
   Artifact --> Data
   Artifact --> Train
   Artifact --> Report[src/reporting/generate_report.py]
-  Artifact --> RuntimeReport[src/reporting/generate_runtime_report.py]
+  Artifact --> RuntimeReport[Airflow annotated email copy]
   Train --> Registry[src/registry/register_best_model.py]
   Model --> Registry
   API --> Feedback[api/app/feedback_store.py]
@@ -34,7 +34,7 @@ All major behavior is driven by `config.yaml`.
 | `inference` | Top-k output size |
 | `continuous_improvement` | Retraining thresholds and Airflow schedule |
 | `reporting` | Report title and report behavior |
-| `email` | Airflow report email settings |
+| `email` | Airflow report email and failure notification settings |
 | `services` | Internal service URLs |
 | `registry` | MLflow model name, champion alias, comparison metric |
 
@@ -134,10 +134,21 @@ flowchart TD
 | `classification_report` | `train` | No |
 | `pipeline_runtime_summary` | `train` and `report` | No |
 | `test_metrics` | `evaluate` | No |
-| `live_metrics` | `evaluate` and runtime report | No |
+| `live_metrics` | `evaluate` and annotated report email | No |
 | `registry_status` | registry step | No |
 
-`src/reporting/generate_report.py` writes DVC-owned pipeline reports under `artifacts/reports/`. `src/reporting/generate_runtime_report.py` writes Airflow-owned email reports under `artifacts/runtime/`, so registry-time reporting does not mutate DVC outputs after `dvc.lock` records their hashes. The runtime report uses the training-and-monitoring report sections and omits metric rows whose values are unavailable instead of printing `n/a`.
+`src/reporting/generate_report.py` writes the canonical DVC-owned pipeline report under `artifacts/reports/`. The Airflow DAG does not build a second independent report; `prepare_airflow_report()` reads the DVC Markdown/HTML report, appends Airflow metadata such as DAG id, run id, logical date, data interval, and `dvc.lock` SHA256, then writes email-ready copies under `artifacts/runtime/`. This keeps the emailed report aligned with the DVC-locked pipeline artifact while still adding operational context.
+
+## Airflow Email Behavior
+
+The DAG sends two kinds of Airflow email through the configured `email.connection_id`, which defaults to `smtp_default`.
+
+| Email type | Implementation | Config gates |
+|---|---|---|
+| Report email | `send_latest_report()` emails the Airflow-annotated DVC report through `SmtpHook(smtp_conn_id=email.connection_id)` | `email.enabled` |
+| Task failure email | `send_task_failure_email()` is registered as `on_failure_callback` and uses the same `SmtpHook` path | `email.enabled` and `email.email_on_failure` |
+
+The DAG intentionally sets Airflow's native `email_on_failure` default argument to `False`. Native Airflow task emails read Airflow's global SMTP settings and may fall back to `localhost:25`; the hook-backed callback keeps failure notifications on the same tested SMTP connection as report emails.
 
 ## Database Tables
 

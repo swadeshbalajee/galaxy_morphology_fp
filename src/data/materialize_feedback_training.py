@@ -37,7 +37,9 @@ def _safe_stem(filename: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", stem)
 
 
-def _resolve_suffix(original_filename: str, content_type: str | None, allowed_suffixes: set[str]) -> str:
+def _resolve_suffix(
+    original_filename: str, content_type: str | None, allowed_suffixes: set[str]
+) -> str:
     suffix = Path(original_filename).suffix.lower()
     if suffix in allowed_suffixes:
         return suffix
@@ -73,9 +75,21 @@ def initialize_feedback_training_snapshot(
     summary_path: Path | None = None,
 ) -> dict:
     config = load_config()
-    output_root = Path(output_root) if output_root else resolve_path(config, "paths.feedback_training_dir")
-    manifest_path = Path(manifest_path) if manifest_path else resolve_path(config, "paths.feedback_training_manifest_path")
-    summary_path = Path(summary_path) if summary_path else resolve_path(config, "paths.feedback_training_summary_path")
+    output_root = (
+        Path(output_root)
+        if output_root
+        else resolve_path(config, "paths.feedback_training_dir")
+    )
+    manifest_path = (
+        Path(manifest_path)
+        if manifest_path
+        else resolve_path(config, "paths.feedback_training_manifest_path")
+    )
+    summary_path = (
+        Path(summary_path)
+        if summary_path
+        else resolve_path(config, "paths.feedback_training_summary_path")
+    )
 
     reset_dir(output_root)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -105,12 +119,30 @@ def materialize_feedback_training_dataset(
 ) -> dict:
     config = load_config()
     root = project_root(config)
-    output_root = Path(output_root) if output_root else resolve_path(config, "paths.feedback_training_dir")
-    manifest_path = Path(manifest_path) if manifest_path else resolve_path(config, "paths.feedback_training_manifest_path")
-    summary_path = Path(summary_path) if summary_path else resolve_path(config, "paths.feedback_training_summary_path")
+    output_root = (
+        Path(output_root)
+        if output_root
+        else resolve_path(config, "paths.feedback_training_dir")
+    )
+    manifest_path = (
+        Path(manifest_path)
+        if manifest_path
+        else resolve_path(config, "paths.feedback_training_manifest_path")
+    )
+    summary_path = (
+        Path(summary_path)
+        if summary_path
+        else resolve_path(config, "paths.feedback_training_summary_path")
+    )
 
-    allowed_labels = {str(label).strip().lower() for label in get_config_value(config, "data.classes", [])}
-    allowed_suffixes = {str(suffix).lower() for suffix in get_config_value(config, "data.allowed_suffixes", [])}
+    allowed_labels = {
+        str(label).strip().lower()
+        for label in get_config_value(config, "data.classes", [])
+    }
+    allowed_suffixes = {
+        str(suffix).lower()
+        for suffix in get_config_value(config, "data.allowed_suffixes", [])
+    }
     output_root = reset_dir(output_root)
 
     rows = _fetch_feedback_rows()
@@ -121,8 +153,14 @@ def materialize_feedback_training_dataset(
     for row in rows:
         corrected_label = str(row["corrected_label"]).strip().lower()
         if corrected_label not in allowed_labels:
-            skipped_invalid_labels[corrected_label] = skipped_invalid_labels.get(corrected_label, 0) + 1
-            LOGGER.warning("Skipping feedback row for unsupported label=%s prediction_id=%s", corrected_label, row["prediction_id"])
+            skipped_invalid_labels[corrected_label] = (
+                skipped_invalid_labels.get(corrected_label, 0) + 1
+            )
+            LOGGER.warning(
+                "Skipping feedback row for unsupported label=%s prediction_id=%s",
+                corrected_label,
+                row["prediction_id"],
+            )
             continue
 
         suffix = _resolve_suffix(
@@ -168,7 +206,9 @@ def materialize_feedback_training_dataset(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Materialize accepted feedback into a DVC-tracked training dataset snapshot.")
+    parser = argparse.ArgumentParser(
+        description="Materialize accepted feedback into a DVC-tracked training dataset snapshot."
+    )
     parser.add_argument("--output-root", default=None)
     parser.add_argument("--manifest-path", default=None)
     parser.add_argument("--summary-path", default=None)

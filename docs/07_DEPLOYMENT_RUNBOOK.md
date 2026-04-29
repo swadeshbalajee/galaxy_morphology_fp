@@ -95,7 +95,7 @@ flowchart TD
 Run the pipeline:
 
 ```bash
-docker compose exec trainer dvc repro report
+docker compose exec trainer dvc repro evaluate report
 ```
 
 Register the latest candidate model and run the promotion decision:
@@ -119,9 +119,24 @@ Open Airflow at `http://localhost:8080` and trigger:
 galaxy_morphology_control_plane
 ```
 
-The DAG inspects state, optionally syncs feedback, runs `dvc repro report`, pushes DVC artifacts when `dvc.push_on_success` is `true`, saves `dvc.lock` provenance, logs `dvc.lock` and `provenance.json` to MLflow, registers a candidate, validates candidate accuracy and macro F1, promotes only passing candidates, reloads the model service only after promotion, generates a runtime report, and emails that runtime report. If CI/CD supplies `DEPLOYMENT_GIT_COMMIT_SHA`, `APP_VERSION`, `CONTAINER_IMAGE`, or `CI_RUN_ID`, those values are recorded in the provenance JSON and mirrored as MLflow `deployment.*` tags.
-When DVC runs, the DAG fails if the configured DVC push fails or if MLflow provenance artifact logging fails. DVC pipeline reports are kept under `artifacts/reports/`; Airflow runtime email reports are generated separately under `artifacts/runtime/`.
-The DAG schedule is controlled by `continuous_improvement.monitor_schedule` and defaults to `30 12 * * *`; Airflow catchup is disabled. The runtime email uses the training-and-monitoring report sections and omits unavailable metric rows.
+The DAG inspects state, optionally syncs feedback, runs `dvc repro evaluate report`, pushes DVC artifacts when `dvc.push_on_success` is `true`, saves `dvc.lock` provenance, logs `dvc.lock` and `provenance.json` to MLflow, registers a candidate, validates candidate accuracy and macro F1, promotes only passing candidates, reloads the model service only after promotion, prepares an Airflow-annotated copy of the DVC report, and emails that annotated report. If CI/CD supplies `DEPLOYMENT_GIT_COMMIT_SHA`, `APP_VERSION`, `CONTAINER_IMAGE`, or `CI_RUN_ID`, those values are recorded in the provenance JSON and mirrored as MLflow `deployment.*` tags.
+When DVC runs, the DAG fails if the configured DVC push fails or if MLflow provenance artifact logging fails. DVC pipeline reports are kept under `artifacts/reports/`; Airflow email copies are kept under `artifacts/runtime/` with DAG/run metadata appended.
+The DAG schedule is controlled by `continuous_improvement.monitor_schedule` and defaults to `30 12 * * *`; Airflow catchup is disabled. If retraining is skipped, the DAG still refreshes `evaluate` and `report` so the email reflects the latest available operational status without rerunning unchanged expensive training stages.
+
+## Airflow Email Configuration
+
+Airflow report emails and task-failure emails both use the Airflow connection configured by `email.connection_id`, defaulting to `smtp_default`.
+
+```yaml
+email:
+  enabled: true
+  email_on_failure: true
+  connection_id: smtp_default
+  recipients:
+    - you@example.com
+```
+
+The DAG uses `SmtpHook(smtp_conn_id="smtp_default")` for both report delivery and failure notifications. Native Airflow `email_on_failure` is disabled in DAG defaults because it uses Airflow's global SMTP settings and can fall back to `localhost:25`, which causes `ConnectionRefusedError` in this Compose setup.
 
 ## Reproducing a Run
 
@@ -147,13 +162,7 @@ artifacts/reports/latest_report.md
 artifacts/reports/latest_report.html
 ```
 
-Generate the Airflow runtime email report:
-
-```bash
-docker compose exec trainer python -m src.reporting.generate_runtime_report
-```
-
-Generated outputs:
+Airflow prepares annotated email copies from those DVC report files. Generated email outputs:
 
 ```text
 artifacts/runtime/latest_runtime_report.md
@@ -200,7 +209,9 @@ LIMIT 50;
 | Airflow DAG fails on DVC | Airflow task logs | Check trainer dependencies and mounted repo path |
 | MLflow registry unavailable | MLflow URL and Postgres health | Restart `mlflow` after Postgres is healthy |
 | No Prometheus targets | Prometheus `/targets` | Verify service names and ports in `prometheus.yml` |
-| No emails | Alertmanager/Airflow SMTP config | Verify `.env` and Airflow SMTP connection |
+| Report email works but failure email hits `localhost:25` | Native Airflow email path is being used | Restart Airflow so the DAG reloads the hook-backed `on_failure_callback`; verify `email.email_on_failure: true` and `email.connection_id: smtp_default` |
+| No Airflow emails | Airflow SMTP connection | Verify `smtp_default` in Airflow connections or set `AIRFLOW_CONN_SMTP_DEFAULT` |
+| No Alertmanager emails | Alertmanager SMTP config | Verify Mailtrap values in `.env` |
 
 ## Shutdown
 

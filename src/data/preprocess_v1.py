@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import argparse
@@ -22,7 +21,9 @@ def preprocess_v1(source_dir: str | Path, output_dir: str | Path) -> dict:
     output_dir = reset_dir(output_dir)
     validation = validate_dataset_layout(source_dir)
     if not validation.is_valid:
-        raise ValueError("Raw dataset validation failed: " + "; ".join(validation.issues))
+        raise ValueError(
+            "Raw dataset validation failed: " + "; ".join(validation.issues)
+        )
 
     resize_to = int(get_config_value(config, "data.preprocess_v1_size", 256))
     start = time.time()
@@ -46,7 +47,9 @@ def preprocess_v1(source_dir: str | Path, output_dir: str | Path) -> dict:
             written += 1
         summary["classes"][class_dir.name] = written
         summary["total_images"] += written
-        LOGGER.info("Preprocess v1 complete for class=%s count=%s", class_dir.name, written)
+        LOGGER.info(
+            "Preprocess v1 complete for class=%s count=%s", class_dir.name, written
+        )
 
     summary["duration_seconds"] = round(time.time() - start, 3)
     store_pipeline_artifact("processed_v1_summary", summary, config=config)
@@ -55,7 +58,9 @@ def preprocess_v1(source_dir: str | Path, output_dir: str | Path) -> dict:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Create the first processed dataset version from raw images.")
+    parser = argparse.ArgumentParser(
+        description="Create the first processed dataset version from raw images."
+    )
     parser.add_argument("--source-dir", default=None)
     parser.add_argument("--output-dir", default=None)
     return parser.parse_args()

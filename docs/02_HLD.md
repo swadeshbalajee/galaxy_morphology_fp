@@ -24,7 +24,7 @@ flowchart TB
 | Decision | Rationale |
 |---|---|
 | DVC for ML stages | Gives deterministic dependencies, outputs, and rerun behavior |
-| Airflow for control plane | Handles scheduled checks, branching, registry, reload, and email |
+| Airflow for control plane | Handles scheduled checks, branching, registry, reload, report email, and failure email callbacks |
 | Postgres for state | Keeps predictions, feedback, service logs, control state, and artifact summaries durable |
 | MLflow registry alias | Lets serving use `models:/galaxy_morphology_classifier@champion` |
 | API gateway in front of model service | Keeps UI decoupled from model loading and storage |
@@ -84,10 +84,11 @@ flowchart TD
   Validate -->|No| Reject[Persist rejection status]
   Validate -->|Yes| Promote[Promote if candidate beats champion]
   Promote --> Reload[Reload model service]
-  Reject --> RuntimeReport[Generate runtime report]
-  Reload --> RuntimeReport[Generate runtime report]
+  Reject --> RuntimeReport[Prepare annotated DVC report]
+  Reload --> RuntimeReport[Prepare annotated DVC report]
   Skip --> RuntimeReport
-  RuntimeReport --> Email[Send runtime report]
+  RuntimeReport --> Email[Send annotated report]
+  Start -. task failure .-> FailureEmail[Send failure email via smtp_default]
 ```
 
 ## Deployment View
