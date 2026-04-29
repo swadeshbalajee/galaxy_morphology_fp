@@ -511,7 +511,7 @@ def branch_runtime_decision() -> str:
 def run_dvc_pipeline() -> None:
     sync_feedback_training_snapshot()
     _run_command(
-        [TRAINING_PYTHON, "-m", "dvc", "repro", "report"], use_training_venv=True
+        [TRAINING_PYTHON, "-m", "dvc", "repro", "evaluate", "report"], use_training_venv=True
     )
     current_pipeline_config_fingerprint = _pipeline_config_fingerprint()
     state = update_control_plane_state(
@@ -648,7 +648,7 @@ def reject_candidate_model() -> None:
 
 
 def generate_runtime_report() -> None:
-    raise ValueError("Testing email on failure")
+    # raise ValueError("Testing email on failure")
     _run_command(
         [TRAINING_PYTHON, "-m", "src.reporting.generate_runtime_report"],
         use_training_venv=True,
