@@ -50,6 +50,8 @@ FEEDBACK_TRAINING_MANIFEST_PATH = resolve_path(
 )
 RUNTIME_REPORT_MD_PATH = resolve_path(CONFIG, "paths.latest_runtime_report_md_path")
 RUNTIME_REPORT_HTML_PATH = resolve_path(CONFIG, "paths.latest_runtime_report_html_path")
+DVC_REPORT_MD_PATH = resolve_path(CONFIG, "paths.latest_report_md_path")
+DVC_REPORT_HTML_PATH = resolve_path(CONFIG, "paths.latest_report_html_path")
 CONFIG_PATH = PROJECT_ROOT / "config.yaml"
 DVC_LOCK_PATH = PROJECT_ROOT / "dvc.lock"
 RUNTIME_RUNS_DIR = resolve_path(CONFIG, "paths.runtime_dir") / "runs"
@@ -511,7 +513,8 @@ def branch_runtime_decision() -> str:
 def run_dvc_pipeline() -> None:
     sync_feedback_training_snapshot()
     _run_command(
-        [TRAINING_PYTHON, "-m", "dvc", "repro", "evaluate", "report"], use_training_venv=True
+        [TRAINING_PYTHON, "-m", "dvc", "repro", "evaluate", "report"],
+        use_training_venv=True,
     )
     current_pipeline_config_fingerprint = _pipeline_config_fingerprint()
     state = update_control_plane_state(
@@ -527,6 +530,13 @@ def run_dvc_pipeline() -> None:
             "current_pipeline_config_fingerprint": current_pipeline_config_fingerprint,
             "pipeline_config_changed": False,
         }
+    )
+
+
+def refresh_dvc_report() -> None:
+    _run_command(
+        [TRAINING_PYTHON, "-m", "dvc", "repro", "evaluate", "report"],
+        use_training_venv=True,
     )
 
 
@@ -647,12 +657,82 @@ def reject_candidate_model() -> None:
     )
 
 
-def generate_runtime_report() -> None:
-    # raise ValueError("Testing email on failure")
-    _run_command(
-        [TRAINING_PYTHON, "-m", "src.reporting.generate_runtime_report"],
-        use_training_venv=True,
+def _airflow_report_metadata(context: dict) -> dict[str, str]:
+    task_instance = context.get("task_instance")
+    dag_run = context.get("dag_run")
+    dag = context.get("dag")
+    return {
+        "prepared_at": _utc_now_iso(),
+        "dag_id": getattr(task_instance, "dag_id", None)
+        or getattr(dag, "dag_id", "unknown"),
+        "run_id": context.get("run_id") or getattr(dag_run, "run_id", "unknown"),
+        "logical_date": str(context.get("logical_date") or ""),
+        "data_interval_start": str(context.get("data_interval_start") or ""),
+        "data_interval_end": str(context.get("data_interval_end") or ""),
+        "dvc_lock_sha256": _sha256_file(DVC_LOCK_PATH)
+        if DVC_LOCK_PATH.exists()
+        else "missing",
+    }
+
+
+def _append_airflow_metadata_markdown(report_text: str, metadata: dict[str, str]) -> str:
+    lines = [
+        "",
+        "## Airflow metadata",
+        f"- Prepared at: {metadata['prepared_at']}",
+        f"- DAG: {metadata['dag_id']}",
+        f"- Run ID: {metadata['run_id']}",
+        f"- Logical date: {metadata['logical_date'] or 'n/a'}",
+        f"- Data interval start: {metadata['data_interval_start'] or 'n/a'}",
+        f"- Data interval end: {metadata['data_interval_end'] or 'n/a'}",
+        f"- DVC lock SHA256: {metadata['dvc_lock_sha256']}",
+    ]
+    return report_text.rstrip() + "\n" + "\n".join(lines) + "\n"
+
+
+def _append_airflow_metadata_html(report_html: str, metadata: dict[str, str]) -> str:
+    items = "\n".join(
+        f"<li><strong>{html.escape(label)}:</strong> {html.escape(value or 'n/a')}</li>"
+        for label, value in [
+            ("Prepared at", metadata["prepared_at"]),
+            ("DAG", metadata["dag_id"]),
+            ("Run ID", metadata["run_id"]),
+            ("Logical date", metadata["logical_date"]),
+            ("Data interval start", metadata["data_interval_start"]),
+            ("Data interval end", metadata["data_interval_end"]),
+            ("DVC lock SHA256", metadata["dvc_lock_sha256"]),
+        ]
     )
+    section = f"<h2>Airflow metadata</h2><ul>{items}</ul>"
+    if "</body>" in report_html:
+        return report_html.replace("</body>", f"{section}\n</body>", 1)
+    return f"{report_html}\n{section}"
+
+
+def prepare_airflow_report(**context) -> None:
+    if not DVC_REPORT_MD_PATH.exists():
+        raise FileNotFoundError(
+            f"DVC report is missing: {DVC_REPORT_MD_PATH}. Run dvc repro report first."
+        )
+
+    metadata = _airflow_report_metadata(context)
+    report_text = DVC_REPORT_MD_PATH.read_text(encoding="utf-8")
+    RUNTIME_REPORT_MD_PATH.parent.mkdir(parents=True, exist_ok=True)
+    RUNTIME_REPORT_MD_PATH.write_text(
+        _append_airflow_metadata_markdown(report_text, metadata),
+        encoding="utf-8",
+    )
+
+    if DVC_REPORT_HTML_PATH.exists():
+        report_html = DVC_REPORT_HTML_PATH.read_text(encoding="utf-8")
+        RUNTIME_REPORT_HTML_PATH.write_text(
+            _append_airflow_metadata_html(report_html, metadata),
+            encoding="utf-8",
+        )
+    elif RUNTIME_REPORT_HTML_PATH.exists():
+        RUNTIME_REPORT_HTML_PATH.unlink()
+
+    LOGGER.info("Prepared Airflow-annotated DVC report at %s", RUNTIME_REPORT_MD_PATH)
 
 
 def reload_model_service() -> None:
@@ -761,11 +841,15 @@ with DAG(
         task_id="reject_candidate_model", python_callable=reject_candidate_model
     )
     runtime_report = PythonOperator(
-        task_id="generate_runtime_report",
-        python_callable=generate_runtime_report,
+        task_id="prepare_airflow_report",
+        python_callable=prepare_airflow_report,
         trigger_rule=TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS,
     )
     skip_retraining = EmptyOperator(task_id="skip_retraining")
+    refresh_report = PythonOperator(
+        task_id="refresh_dvc_report",
+        python_callable=refresh_dvc_report,
+    )
     reload_service = PythonOperator(
         task_id="reload_model_service", python_callable=reload_model_service
     )
@@ -796,4 +880,4 @@ with DAG(
         >> finish
     )
     validate_candidate >> reject_model >> runtime_report >> send_email >> finish
-    decide >> skip_retraining >> runtime_report >> send_email >> finish
+    decide >> skip_retraining >> refresh_report >> runtime_report >> send_email >> finish

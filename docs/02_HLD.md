@@ -84,10 +84,10 @@ flowchart TD
   Validate -->|No| Reject[Persist rejection status]
   Validate -->|Yes| Promote[Promote if candidate beats champion]
   Promote --> Reload[Reload model service]
-  Reject --> RuntimeReport[Generate runtime report]
-  Reload --> RuntimeReport[Generate runtime report]
+  Reject --> RuntimeReport[Prepare annotated DVC report]
+  Reload --> RuntimeReport[Prepare annotated DVC report]
   Skip --> RuntimeReport
-  RuntimeReport --> Email[Send runtime report]
+  RuntimeReport --> Email[Send annotated report]
   Start -. task failure .-> FailureEmail[Send failure email via smtp_default]
 ```
 

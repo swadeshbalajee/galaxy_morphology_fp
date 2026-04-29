@@ -79,13 +79,13 @@ The frontend is intentionally decoupled from model inference. Streamlit calls th
 
 Predictions and corrections are stored in Postgres. Airflow inspects runtime state and decides whether retraining is needed based on missing artifacts, degraded metrics, feedback thresholds, or configuration changes. Accepted feedback can be materialized into training data and used in future DVC runs.
 
-This creates a closed loop: prediction -> correction -> feedback snapshot -> retraining decision -> candidate model -> validation -> champion promotion or rejection -> runtime report.
+This creates a closed loop: prediction -> correction -> feedback snapshot -> retraining decision -> candidate model -> validation -> champion promotion or rejection -> annotated DVC report email.
 
 ## Observability, Alerts, and Logging
 
 Prometheus scrapes the API, model service, and pipeline exporter. Grafana visualizes service health, prediction behavior, latency, drift, and pipeline metrics. Loki receives log streams through Promtail, while service logs are also persisted in Postgres for queryable evidence.
 
-Alertmanager sends email through Mailtrap. Airflow sends runtime report emails and task failure notifications through the configured `smtp_default` connection. The live alert route was verified with TLS enabled, and `GalaxyLiveAccuracyLow` moved from pending to firing after its five-minute `for` window.
+Alertmanager sends email through Mailtrap. Airflow sends annotated DVC report emails and task failure notifications through the configured `smtp_default` connection. The live alert route was verified with TLS enabled, and `GalaxyLiveAccuracyLow` moved from pending to firing after its five-minute `for` window.
 
 | Signal | Tooling | Evidence |
 |---|---|---|
@@ -142,7 +142,7 @@ The test strategy combines unit tests, integration health checks, functional tes
 | Unit tests | Schemas, preprocessing, metrics, live feedback metrics, config contracts |
 | Integration tests | API health contract |
 | Functional tests | DVC DAG, DVC report pipeline, frontend upload, batch upload, feedback CSV, model reload, report generation |
-| Airflow tests | Branching, DVC run, candidate registration, validation, promotion/rejection, runtime report email, failure email callback |
+| Airflow tests | Branching, DVC run, candidate registration, validation, promotion/rejection, annotated report email, failure email callback |
 | Observability tests | Metrics endpoints, Prometheus targets, Grafana dashboard, Loki readiness, Alertmanager email |
 
 Acceptance criteria are met when the stack starts successfully, the user can perform predictions and feedback, the pipeline can regenerate artifacts, MLflow records candidate/champion decisions, monitoring surfaces runtime signals, alerts can deliver email, and proof screenshots are captured.
@@ -197,7 +197,7 @@ Evidence expected: Show `galaxy_morphology_control_plane` DAG success or branch 
 
 ### Image Placeholder: DVC Pipeline DAG
 
-Evidence expected: Show DVC pipeline visualization or successful `dvc repro report`.
+Evidence expected: Show DVC pipeline visualization or successful `dvc repro evaluate report`.
 
 ![Placeholder - DVC Pipeline DAG](image/proof/<replace-with-screenshot>.png)
 

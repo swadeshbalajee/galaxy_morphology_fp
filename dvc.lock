@@ -297,9 +297,9 @@ stages:
     outs:
     - path: artifacts/reports/latest_report.html
       hash: md5
-      md5: 08c3f37e8389a84c012b3f4a27bdb6bf
-      size: 1421
+      md5: 841b0f5ad2c5ebb037dfce624bd6c686
+      size: 1422
     - path: artifacts/reports/latest_report.md
       hash: md5
-      md5: 36829454050a77c35f98000f07045f3b
-      size: 1778
+      md5: d7c1ebfa4b0e5a3e28cb2d6bef6e34c3
+      size: 1779

@@ -120,8 +120,8 @@ flowchart TD
   Compare -->|Yes| Promote[Move champion alias]
   Compare -->|No| Keep[Keep current champion]
   Promote --> Reload[Reload model service]
-  Reject --> RuntimeReport[Generate runtime report]
-  Keep --> RuntimeReport[Generate runtime report]
+  Reject --> RuntimeReport[Prepare annotated DVC report]
+  Keep --> RuntimeReport[Prepare annotated DVC report]
 ```
 
 Airflow saves the generated `dvc.lock` and `provenance.json` for each DVC run under `artifacts/runtime/runs/<airflow_run_id>/` and logs both to the corresponding MLflow run. When CI/CD supplies deployment metadata through environment variables, the provenance records the Git commit SHA, app version, container image, and CI run id, and MLflow receives matching `deployment.*` tags.
@@ -211,8 +211,8 @@ flowchart LR
 | Model export | `models/latest`, MLflow artifacts, registry alias |
 | Drift baseline | Local JSON plus Postgres snapshot |
 | Metrics and summaries | Postgres JSONB snapshots |
-| DVC pipeline reports | `artifacts/reports/latest_report.md` and `.html` |
-| Airflow runtime reports | `artifacts/runtime/latest_runtime_report.md` and `.html` |
+| DVC pipeline reports | Canonical reports at `artifacts/reports/latest_report.md` and `.html` |
+| Airflow annotated report copies | Email-ready copies at `artifacts/runtime/latest_runtime_report.md` and `.html` |
 | Airflow report/failure emails | Airflow `smtp_default` connection through `SmtpHook` |
 | Images uploaded for prediction | Postgres `BYTEA` in `predictions` |
 | Feedback training images | Filesystem snapshot from accepted corrections |

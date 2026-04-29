@@ -95,7 +95,7 @@ flowchart TD
 Run the pipeline:
 
 ```bash
-docker compose exec trainer dvc repro report
+docker compose exec trainer dvc repro evaluate report
 ```
 
 Register the latest candidate model and run the promotion decision:
@@ -119,9 +119,9 @@ Open Airflow at `http://localhost:8080` and trigger:
 galaxy_morphology_control_plane
 ```
 
-The DAG inspects state, optionally syncs feedback, runs `dvc repro report`, pushes DVC artifacts when `dvc.push_on_success` is `true`, saves `dvc.lock` provenance, logs `dvc.lock` and `provenance.json` to MLflow, registers a candidate, validates candidate accuracy and macro F1, promotes only passing candidates, reloads the model service only after promotion, generates a runtime report, and emails that runtime report. If CI/CD supplies `DEPLOYMENT_GIT_COMMIT_SHA`, `APP_VERSION`, `CONTAINER_IMAGE`, or `CI_RUN_ID`, those values are recorded in the provenance JSON and mirrored as MLflow `deployment.*` tags.
-When DVC runs, the DAG fails if the configured DVC push fails or if MLflow provenance artifact logging fails. DVC pipeline reports are kept under `artifacts/reports/`; Airflow runtime email reports are generated separately under `artifacts/runtime/`.
-The DAG schedule is controlled by `continuous_improvement.monitor_schedule` and defaults to `30 12 * * *`; Airflow catchup is disabled. The runtime email uses the training-and-monitoring report sections and omits unavailable metric rows.
+The DAG inspects state, optionally syncs feedback, runs `dvc repro evaluate report`, pushes DVC artifacts when `dvc.push_on_success` is `true`, saves `dvc.lock` provenance, logs `dvc.lock` and `provenance.json` to MLflow, registers a candidate, validates candidate accuracy and macro F1, promotes only passing candidates, reloads the model service only after promotion, prepares an Airflow-annotated copy of the DVC report, and emails that annotated report. If CI/CD supplies `DEPLOYMENT_GIT_COMMIT_SHA`, `APP_VERSION`, `CONTAINER_IMAGE`, or `CI_RUN_ID`, those values are recorded in the provenance JSON and mirrored as MLflow `deployment.*` tags.
+When DVC runs, the DAG fails if the configured DVC push fails or if MLflow provenance artifact logging fails. DVC pipeline reports are kept under `artifacts/reports/`; Airflow email copies are kept under `artifacts/runtime/` with DAG/run metadata appended.
+The DAG schedule is controlled by `continuous_improvement.monitor_schedule` and defaults to `30 12 * * *`; Airflow catchup is disabled. If retraining is skipped, the DAG still refreshes `evaluate` and `report` so the email reflects the latest available operational status without rerunning unchanged expensive training stages.
 
 ## Airflow Email Configuration
 
@@ -162,13 +162,7 @@ artifacts/reports/latest_report.md
 artifacts/reports/latest_report.html
 ```
 
-Generate the Airflow runtime email report:
-
-```bash
-docker compose exec trainer python -m src.reporting.generate_runtime_report
-```
-
-Generated outputs:
+Airflow prepares annotated email copies from those DVC report files. Generated email outputs:
 
 ```text
 artifacts/runtime/latest_runtime_report.md

@@ -21,11 +21,11 @@ pie title Test Coverage by Intent
 | Integration tests | Pending final run | Run `pytest tests/integration` |
 | Full test suite | Pending final run | Run `pytest` |
 | DVC DAG | Pending final run | Run `dvc dag` |
-| Full DVC pipeline | Pending final run | Run `docker compose exec trainer dvc repro report` |
+| Full DVC pipeline | Pending final run | Run `docker compose exec trainer dvc repro evaluate report` |
 | Airflow control-plane DAG | Pending proof screenshot | Trigger `galaxy_morphology_control_plane` |
 | Frontend prediction | Pending proof screenshot | Capture single-image prediction |
 | Batch prediction | Pending proof screenshot | Capture ZIP batch result |
-| Feedback loop | Pending final run | Submit feedback or upload correction CSV, then inspect Postgres/runtime report |
+| Feedback loop | Pending final run | Submit feedback or upload correction CSV, then inspect Postgres and the annotated report email |
 | MLflow registry | Pending final run | Inspect candidate, validation status, champion alias, and MLflow provenance artifacts |
 | Prometheus and Grafana | Pending proof screenshot | Capture targets and dashboard |
 | Loki logs | Pending proof screenshot | Capture Loki/Grafana log view |
@@ -67,7 +67,7 @@ flowchart LR
 ```bash
 pytest
 dvc dag
-docker compose exec trainer dvc repro report
+docker compose exec trainer dvc repro evaluate report
 docker compose ps
 ```
 

@@ -170,7 +170,7 @@ flowchart TD
   Compare -->|Yes| Promote[Set champion alias]
   Compare -->|No| Keep[Keep current champion]
   Promote --> Reload[Reload model service]
-  Reject --> Report[Runtime report]
+  Reject --> Report[Annotated DVC report]
   Keep --> Report
   Reload --> Report
 ```
@@ -316,16 +316,10 @@ docker compose up -d --build
 docker compose ps
 ```
 
-To run the DVC report pipeline:
+To run the DVC evaluation and report pipeline:
 
 ```bash
-docker compose exec trainer dvc repro report
-```
-
-To regenerate the runtime report:
-
-```bash
-docker compose exec trainer python -m src.reporting.generate_runtime_report
+docker compose exec trainer dvc repro evaluate report
 ```
 
 ## 10. Testing and Validation
@@ -362,7 +356,7 @@ The final submission combines automated checks, functional workflow checks, Airf
 | ID | Case | Expected Result | Status |
 |---|---|---|---|
 | F-01 | Run `dvc dag` | DVC graph renders successfully | Passed |
-| F-02 | Run `dvc repro report` | Raw, processed, model, metrics, and report artifacts are generated | Passed |
+| F-02 | Run `dvc repro evaluate report` | Raw, processed, model, metrics, evaluation, and report artifacts are generated | Passed |
 | F-03 | Open Streamlit frontend | UI loads successfully | Passed |
 | F-04 | Upload one image | Prediction is shown and stored | Passed |
 | F-05 | Upload ZIP batch | Batch and prediction rows are stored | Passed |
@@ -520,7 +514,7 @@ This checklist maps the evaluation guideline to evidence included in this report
 | DVC pipeline functional cases | 3 | 3 | 0 | DVC pipeline and generated report artifacts |
 | Frontend/API/model service workflows | 5 | 5 | 0 | Streamlit, API docs, recent prediction screenshots |
 | Feedback workflows | 2 | 2 | 0 | Recent predictions, CSV correction design, Postgres evidence |
-| Airflow and registry workflows | 9 | 9 | 0 | Airflow and MLflow screenshots, runtime report |
+| Airflow and registry workflows | 9 | 9 | 0 | Airflow and MLflow screenshots, annotated report email |
 | Observability workflows | 7 | 7 | 0 | Prometheus, Grafana, Loki, Alertmanager, Mailtrap evidence |
 | Deployment proof | 13 | 13 | 0 | Screenshots in `image/proof/` |
 | **Total** | **45** | **45** | **0** | **All required evidence captured** |
@@ -561,7 +555,7 @@ The high-level design has seven logical subsystems:
 | Control subsystem | Use Airflow to decide when to retrain, register, validate, promote, reload, email reports, and send failure notifications |
 | Observability subsystem | Collect metrics, logs, dashboards, and alerts |
 
-The control plane checks whether raw data, model artifacts, metrics, feedback thresholds, or configuration changes require a new DVC run. If a run is needed, Airflow executes the pipeline, records provenance, registers the candidate, validates thresholds, compares against the champion, reloads serving only after promotion, and sends a runtime report.
+The control plane checks whether raw data, model artifacts, metrics, feedback thresholds, or configuration changes require a new DVC run. If a run is needed, Airflow executes the pipeline, records provenance, registers the candidate, validates thresholds, compares against the champion, reloads serving only after promotion, and sends an Airflow-annotated copy of the canonical DVC report.
 
 #### Logical Subsystem View
 
@@ -601,7 +595,8 @@ flowchart TB
 ```mermaid
 flowchart TB
   Run[Completed DVC run] --> Provenance[Save provenance]
-  Skip[Skipped retraining] --> Report[Runtime report]
+  Skip[Skipped retraining] --> Refresh[Refresh DVC report]
+  Refresh --> Report[Annotated DVC report]
   Provenance --> Register[Register candidate]
   Register --> Validate{Passes thresholds?}
   Validate -->|No| Reject[Reject]
@@ -626,7 +621,7 @@ The low-level design is organized by modules and service contracts:
 | `src/data/` | Downloads, preprocesses, splits, and materializes feedback data |
 | `src/training/` | Trains and evaluates the PyTorch classifier |
 | `src/registry/register_best_model.py` | Registers candidate models and manages champion promotion |
-| `src/reporting/` | Generates DVC pipeline reports and Airflow runtime reports |
+| `src/reporting/` | Generates canonical DVC pipeline reports; Airflow appends run metadata before email delivery |
 | `api/app/main.py` | Owns API gateway endpoints, persistence, and response shaping |
 | `model_service/app/main.py` | Owns model loading, prediction, reload, and model metrics |
 | `frontend/` | Provides Streamlit user workflows |

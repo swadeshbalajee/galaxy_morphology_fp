@@ -78,7 +78,7 @@ flowchart LR
 Run the full pipeline inside the trainer container:
 
 ```bash
-docker compose exec trainer dvc repro report
+docker compose exec trainer dvc repro evaluate report
 ```
 
 ## Airflow Control Plane
@@ -94,14 +94,14 @@ flowchart TD
   Register --> Validate[validate_candidate_model]
   Validate -->|passed| Promote[promote_candidate_model]
   Promote --> Reload[reload_model_service]
-  Validate -->|failed| RuntimeReport[generate_runtime_report]
+  Validate -->|failed| RuntimeReport[prepare_airflow_report]
   Reload --> RuntimeReport
   Skip --> RuntimeReport
   RuntimeReport --> Email[send_report_email]
   Email --> Finish[finish]
 ```
 
-Airflow runs the DVC pipeline when raw data or model artifacts are missing, metrics degrade below configured thresholds, enough new feedback has arrived, or the pipeline configuration fingerprint changes. After a successful DVC run, Airflow pushes DVC artifacts to the configured remote when `dvc.push_on_success` is `true`, saves `dvc.lock` provenance under `artifacts/runtime/runs/<run_id>/`, logs `dvc.lock` and `provenance.json` to MLflow, registers a candidate, validates accuracy and macro F1 thresholds, promotes only passing candidates, and reloads serving only after promotion. The provenance JSON also records deployment metadata from `DEPLOYMENT_GIT_COMMIT_SHA`, `APP_VERSION`, `CONTAINER_IMAGE`, and `CI_RUN_ID` when those environment variables are supplied by CI/CD. DVC-owned reports stay under `artifacts/reports/`; Airflow runtime reports are generated separately under `artifacts/runtime/` and emailed with the configured `smtp_default` connection. Task-failure notifications also use the same hook-backed SMTP connection through the DAG failure callback.
+Airflow runs the DVC pipeline when raw data or model artifacts are missing, metrics degrade below configured thresholds, enough new feedback has arrived, or the pipeline configuration fingerprint changes. After a successful DVC run, Airflow pushes DVC artifacts to the configured remote when `dvc.push_on_success` is `true`, saves `dvc.lock` provenance under `artifacts/runtime/runs/<run_id>/`, logs `dvc.lock` and `provenance.json` to MLflow, registers a candidate, validates accuracy and macro F1 thresholds, promotes only passing candidates, and reloads serving only after promotion. The provenance JSON also records deployment metadata from `DEPLOYMENT_GIT_COMMIT_SHA`, `APP_VERSION`, `CONTAINER_IMAGE`, and `CI_RUN_ID` when those environment variables are supplied by CI/CD. The DVC report under `artifacts/reports/` is the canonical pipeline report. Airflow prepares an annotated email copy under `artifacts/runtime/` by appending DAG/run metadata, then emails it with the configured `smtp_default` connection. Task-failure notifications also use the same hook-backed SMTP connection through the DAG failure callback.
 
 To reproduce a tracked run, check out the matching code version, download that run's `dvc.lock` artifact from MLflow, replace the local root `dvc.lock`, then pull the recorded artifacts:
 
@@ -216,16 +216,15 @@ The latest generated report in `artifacts/reports/latest_report.md` records:
 pytest
 
 # Run DVC pipeline in trainer
-docker compose exec trainer dvc repro report
+docker compose exec trainer dvc repro evaluate report
 
 # Push DVC artifacts to the configured remote
 docker compose exec trainer dvc push
 
-# Trigger report generation only
+# Trigger canonical DVC report generation
 docker compose exec trainer python -m src.reporting.generate_report
 
-# Trigger runtime email report generation only
-docker compose exec trainer python -m src.reporting.generate_runtime_report
+# Airflow emails an annotated copy of artifacts/reports/latest_report.*
 
 # Register latest candidate model
 docker compose exec trainer python -m src.registry.register_best_model register-candidate
