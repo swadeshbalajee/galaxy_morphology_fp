@@ -1,7 +1,7 @@
 schema: '2.0'
 stages:
   fetch_raw:
-    cmd: /opt/venvs/training/bin/python -m src.data.download_galaxy_zoo
+    cmd: python -m src.data.download_galaxy_zoo
     deps:
     - path: config.yaml
       hash: md5
@@ -40,7 +40,7 @@ stages:
       size: 7110883
       nfiles: 500
   preprocess_v1:
-    cmd: /opt/venvs/training/bin/python -m src.data.preprocess_v1
+    cmd: python -m src.data.preprocess_v1
     deps:
     - path: config.yaml
       hash: md5
@@ -89,7 +89,7 @@ stages:
       size: 7986917
       nfiles: 500
   preprocess_final:
-    cmd: /opt/venvs/training/bin/python -m src.data.preprocess_final
+    cmd: python -m src.data.preprocess_final
     deps:
     - path: config.yaml
       hash: md5
@@ -151,7 +151,7 @@ stages:
       size: 7986917
       nfiles: 500
   train:
-    cmd: /opt/venvs/training/bin/python -m src.training.train
+    cmd: python -m src.training.train
     deps:
     - path: artifacts/feedback_training_manifest.csv
       hash: md5
@@ -214,49 +214,50 @@ stages:
       size: 44801461
       nfiles: 7
   evaluate:
-    cmd: /opt/venvs/training/bin/python -m src.training.evaluate
+    cmd: python -m src.training.evaluate
     deps:
     - path: config.yaml
       hash: md5
-      md5: 574d6837b8a9aea2e6a2bb75149886cb
-      size: 4084
+      md5: 2b11e910f2eeed25550d646cf044be18
+      size: 4345
       isexec: true
     - path: data/processed/final/test
       hash: md5
-      md5: f2c9c87afd3271032be6fa76de27381e.dir
-      size: 6052169
-      nfiles: 375
+      md5: aadca320a10f714ae81d6a7e55223eae.dir
+      size: 1191500
+      nfiles: 75
     - path: models/latest
       hash: md5
-      md5: ad5e18eff84993c35e1b3a0d5f537643.dir
+      md5: f73a46bff76427ea79fa4ea54abb84ae.dir
       size: 44801461
       nfiles: 7
+    - path: src/common/artifact_store.py
+      hash: md5
+      md5: 45ba8b59e4598e5efc16304c76a52b16
+      size: 7286
+      isexec: true
     - path: src/common/config.py
       hash: md5
-      md5: 80cb1ba6c5ab567774513780b6f7a8a7
-      size: 1424
+      md5: b0ad2e00f19294f23d09294ffab7ee5c
+      size: 1443
       isexec: true
     - path: src/common/io_utils.py
       hash: md5
-      md5: 6d09d23cf690b11edbb2d5d8ea32abf0
-      size: 1359
+      md5: 781bfebeed8ab86ac09994432c930b0d
+      size: 1400
+      isexec: true
+    - path: src/common/postgres.py
+      hash: md5
+      md5: 86ccb5134faf6085483a8e2e3d147fd5
+      size: 13241
       isexec: true
     - path: src/training/evaluate.py
       hash: md5
-      md5: 013eb9af8b42f7f7a127820ea342c105
-      size: 4862
+      md5: 4521f9a9ec48f6904eae2d97a0100173
+      size: 7648
       isexec: true
-    outs:
-    - path: artifacts/live_metrics.json
-      hash: md5
-      md5: 0d89e94f8dd688aadae67dd82f1becde
-      size: 64
-    - path: artifacts/test_metrics.json
-      hash: md5
-      md5: 56b52320027ce83b48302c04ab3e45bb
-      size: 319
   report:
-    cmd: /opt/venvs/training/bin/python -m src.reporting.generate_report
+    cmd: python -m src.reporting.generate_report
     deps:
     - path: config.yaml
       hash: md5
