@@ -8,7 +8,8 @@ This file records the latest verification state. Update the checkboxes after a f
 pie title Test Coverage by Intent
   "Schemas and contracts" : 2
   "Preprocessing and data validation" : 2
-  "Metrics" : 2
+  "Metrics" : 4
+  "Airflow control-plane contracts" : 6
   "Health integration" : 1
 ```
 
@@ -28,7 +29,7 @@ pie title Test Coverage by Intent
 | MLflow registry | Pending final run | Inspect candidate, validation status, champion alias, and MLflow provenance artifacts |
 | Prometheus and Grafana | Pending proof screenshot | Capture targets and dashboard |
 | Loki logs | Pending proof screenshot | Capture Loki/Grafana log view |
-| Email delivery | Pending proof screenshot | Capture report or alert email |
+| Email delivery | Pending proof screenshot | Capture report, Airflow failure, or alert email |
 
 ## Final Report Snapshot Template
 
@@ -86,4 +87,5 @@ docker compose ps
 - [ ] Grafana dashboard checked
 - [ ] Loki logs checked
 - [ ] Report email checked
+- [ ] Airflow failure email checked
 - [ ] Screenshots saved under `image/proof/`

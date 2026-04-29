@@ -112,6 +112,7 @@ reporting:
 
 email:
   enabled: true
+  email_on_failure: true
   connection_id: smtp_default
   sender: ""
   recipients:

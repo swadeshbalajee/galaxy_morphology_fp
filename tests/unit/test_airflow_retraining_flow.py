@@ -132,6 +132,14 @@ def test_dvc_push_obeys_true_false_config(galaxy_pipeline, monkeypatch):
     assert calls == [[galaxy_pipeline.TRAINING_PYTHON, "-m", "dvc", "push"]]
 
 
+def test_airflow_default_args_enable_hook_backed_failure_email(galaxy_pipeline):
+    assert galaxy_pipeline.CONFIG["email"]["email_on_failure"] is True
+    assert galaxy_pipeline.DEFAULT_ARGS["email_on_failure"] is False
+    assert galaxy_pipeline.DEFAULT_ARGS["on_failure_callback"] == (
+        galaxy_pipeline.send_task_failure_email
+    )
+
+
 def test_mlflow_logging_failure_raises(galaxy_pipeline, tmp_path, monkeypatch):
     run_dir = tmp_path / "runs" / "manual"
     run_dir.mkdir(parents=True)

@@ -62,12 +62,64 @@ def _required_config(key: str):
     return value
 
 
+def send_task_failure_email(context: dict) -> None:
+    if not bool(get_config_value(CONFIG, "email.email_on_failure", True)):
+        return
+    if not get_config_value(CONFIG, "email.enabled", False):
+        LOGGER.info("Email delivery disabled in config; skipping failure email.")
+        return
+
+    recipients = get_config_value(CONFIG, "email.recipients", [])
+    if not recipients:
+        LOGGER.warning("No email recipients configured; skipping failure email.")
+        return
+
+    task_instance = context.get("task_instance")
+    dag_id = getattr(task_instance, "dag_id", context.get("dag").dag_id if context.get("dag") else "unknown")
+    task_id = getattr(task_instance, "task_id", "unknown")
+    run_id = context.get("run_id") or getattr(context.get("dag_run"), "run_id", "unknown")
+    log_url = getattr(task_instance, "log_url", "")
+    exception = context.get("exception")
+
+    subject_prefix = get_config_value(CONFIG, "email.subject_prefix", "[Galaxy MLOps]")
+    subject = f"{subject_prefix} Airflow task failed: {dag_id}.{task_id}"
+    sender = get_config_value(CONFIG, "email.sender") or None
+    smtp_conn_id = get_config_value(CONFIG, "email.connection_id", "smtp_default")
+    html_content = f"""
+    <html>
+      <body>
+        <h3>Airflow task failed</h3>
+        <p><strong>DAG:</strong> {html.escape(str(dag_id))}</p>
+        <p><strong>Task:</strong> {html.escape(str(task_id))}</p>
+        <p><strong>Run:</strong> {html.escape(str(run_id))}</p>
+        <p><strong>Exception:</strong> {html.escape(str(exception))}</p>
+        <p><a href="{html.escape(str(log_url))}">Open task logs</a></p>
+      </body>
+    </html>
+    """
+
+    LOGGER.info(
+        "Sending failure email to %s via Airflow SMTP connection %s",
+        recipients,
+        smtp_conn_id,
+    )
+    with SmtpHook(smtp_conn_id=smtp_conn_id) as smtp_hook:
+        smtp_hook.send_email_smtp(
+            to=recipients,
+            subject=subject,
+            html_content=html_content,
+            from_email=sender,
+        )
+
+
 DEFAULT_ARGS = {
     "owner": "airflow",
     "retries": int(_required_config("orchestration.airflow_retries")),
     "retry_delay": timedelta(
         minutes=int(_required_config("orchestration.airflow_retry_delay_minutes"))
     ),
+    "email_on_failure": False,
+    "on_failure_callback": send_task_failure_email,
 }
 
 
@@ -596,6 +648,7 @@ def reject_candidate_model() -> None:
 
 
 def generate_runtime_report() -> None:
+    raise ValueError("Testing email on failure")
     _run_command(
         [TRAINING_PYTHON, "-m", "src.reporting.generate_runtime_report"],
         use_training_venv=True,

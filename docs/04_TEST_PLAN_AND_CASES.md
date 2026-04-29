@@ -19,6 +19,7 @@ flowchart TB
 | `tests/unit/test_metrics.py` | Drift baseline behavior |
 | `tests/unit/test_live_feedback_metrics.py` | Live feedback metric calculation |
 | `tests/unit/test_config_contracts.py` | Config contract expectations |
+| `tests/unit/test_airflow_retraining_flow.py` | Airflow provenance, DVC push policy, model validation gates, failure-email callback wiring |
 | `tests/integration/test_health_contracts.py` | API `/health` contract |
 
 ## Functional Test Cases
@@ -69,6 +70,7 @@ flowchart TD
 | A-07 | Candidate fails validation | DAG stores rejected validation status and emails runtime report without reloading model service |
 | A-08 | Candidate passes validation but does not beat champion | DAG keeps current champion and emails the final registry decision |
 | A-09 | Deployment metadata supplied | MLflow run has `deployment.*` tags and provenance JSON contains deployment fields |
+| A-10 | Task fails while failure email is enabled | DAG failure callback sends email through `smtp_default` rather than Airflow's native localhost SMTP path |
 
 ## Observability Test Cases
 
@@ -81,6 +83,7 @@ flowchart TD
 | O-05 | Open Grafana | Dashboard datasource provisioning works |
 | O-06 | Open Loki ready endpoint | Loki is ready and Promtail can push logs |
 | O-07 | Fire alert condition | Alertmanager sends email through configured SMTP |
+| O-08 | Trigger Airflow task failure | Airflow sends failure notification through configured `smtp_default` connection |
 
 ## Manual Proof Checklist
 

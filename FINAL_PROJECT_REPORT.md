@@ -6,7 +6,7 @@ Project type: End-to-end machine learning application with MLOps lifecycle
 
 ## Abstract
 
-This project implements a complete MLOps platform for classifying galaxy morphology from images. The application predicts one of five classes: `elliptical`, `spiral`, `lenticular`, `irregular`, and `merger`. It includes a user-facing Streamlit interface, FastAPI gateway, dedicated model-serving service, reproducible DVC pipeline, Airflow orchestration, MLflow experiment tracking and model registry, Postgres-backed application state, Prometheus metrics, Grafana dashboards, Loki log aggregation, and Alertmanager email alerts.
+This project implements a complete MLOps platform for classifying galaxy morphology from images. The application predicts one of five classes: `elliptical`, `spiral`, `lenticular`, `irregular`, and `merger`. It includes a user-facing Streamlit interface, FastAPI gateway, dedicated model-serving service, reproducible DVC pipeline, Airflow orchestration, MLflow experiment tracking and model registry, Postgres-backed application state, Prometheus metrics, Grafana dashboards, Loki log aggregation, Alertmanager email alerts, and Airflow report/failure emails.
 
 The system supports both model development and live operation. Users can upload a single galaxy image or ZIP batch, view predictions and confidence scores, submit corrections, and inspect recent predictions. The engineering workflow supports data ingestion, preprocessing, training, evaluation, candidate model registration, champion promotion decisions, runtime reporting, monitoring, and feedback-aware retraining.
 
@@ -66,7 +66,7 @@ The system is designed as a local Docker Compose deployment suitable for academi
 | Online inference | FastAPI API gateway and model-serving endpoint |
 | Feedback loop | Postgres prediction records and correction workflows |
 | Retraining orchestration | Airflow DAG with inspection, branching, candidate registration, validation, and reporting |
-| Monitoring | Prometheus metrics, Grafana dashboard, Loki logs, and Alertmanager email |
+| Monitoring | Prometheus metrics, Grafana dashboard, Loki logs, Alertmanager email, and Airflow report/failure email |
 | Testing | Unit tests, integration health contract, functional test plan, and manual proof checklist |
 | Documentation | Architecture, HLD, LLD, test plan, user manual, deployment runbook, and proof evidence are included in this report |
 
@@ -109,7 +109,7 @@ flowchart TB
 | Design Decision | Reason |
 |---|---|
 | DVC for the training pipeline | Provides deterministic stages, dependencies, outputs, and reproducibility |
-| Airflow for the control plane | Handles branching, scheduled checks, model registration, reloads, and report email |
+| Airflow for the control plane | Handles branching, scheduled checks, model registration, reloads, report email, and failure email callbacks |
 | Separate API and model service | Keeps storage and UI concerns separate from model loading and inference |
 | MLflow model registry | Supports candidate versions and a stable champion alias for serving |
 | Postgres for state | Stores predictions, feedback corrections, service logs, and artifact snapshots |
@@ -270,10 +270,10 @@ The system provides operational visibility through metrics, dashboards, logs, an
 | Pipeline metrics | Pipeline exporter | Prometheus scrape target |
 | Dashboards | Grafana | Provisioned MLOps dashboard |
 | Logs | Loki and Promtail | Grafana log explorer |
-| Email alerts | Alertmanager and Mailtrap | Alert email screenshot |
+| Email alerts | Alertmanager, Airflow SMTP hook, and Mailtrap | Alert/report/failure email screenshot |
 | Database state | Adminer | SQL proof screenshot |
 
-Alertmanager was configured for email delivery through Mailtrap. The proof screenshots show both alert configuration and received email evidence.
+Alertmanager was configured for email delivery through Mailtrap. Airflow report and task-failure emails use the configured `smtp_default` connection through `SmtpHook`, avoiding the native localhost SMTP fallback. The proof screenshots show alert configuration and received email evidence.
 
 ## 9. Deployment
 
@@ -381,7 +381,7 @@ The final submission combines automated checks, functional workflow checks, Airf
 | Deployment provenance | 1 | DVC lock and provenance metadata are logged for traceability | Passed |
 | Prometheus metrics | 3 | API, model service, and pipeline exporter expose metrics | Passed |
 | Grafana and Loki | 2 | Dashboard loads and logs are queryable | Passed |
-| Alertmanager email | 1 | Alert email is delivered through configured SMTP/Mailtrap route | Passed |
+| Email delivery | 1 | Alert/report/failure email is delivered through configured SMTP/Mailtrap route | Passed |
 | Database evidence | 1 | Predictions, feedback, service logs, and artifact snapshots are visible in Postgres/Adminer | Passed |
 
 ## 11. Runtime Results
@@ -540,7 +540,7 @@ This checklist maps the evaluation guideline to evidence included in this report
 | Postgres stores prediction and feedback evidence | Met | Adminer SQL screenshot |
 | Prometheus collects operational metrics | Met | Prometheus screenshot |
 | Grafana visualizes monitoring signals | Met | Grafana screenshots |
-| Email alert/report delivery is configured and proven | Met | Email alert and Mailtrap screenshots |
+| Email alert/report/failure delivery is configured and proven | Met | Email alert and Mailtrap screenshots |
 | Final report contains proof and runtime results | Met | Sections 11 and 12 |
 
 All acceptance criteria are marked **Met** for this submission.
@@ -558,7 +558,7 @@ The high-level design has seven logical subsystems:
 | Registry subsystem | Register candidates and maintain the champion alias |
 | Serving subsystem | Expose model predictions through API and model services |
 | Feedback subsystem | Store corrections and make them available for improvement |
-| Control subsystem | Use Airflow to decide when to retrain, register, validate, promote, reload, and email reports |
+| Control subsystem | Use Airflow to decide when to retrain, register, validate, promote, reload, email reports, and send failure notifications |
 | Observability subsystem | Collect metrics, logs, dashboards, and alerts |
 
 The control plane checks whether raw data, model artifacts, metrics, feedback thresholds, or configuration changes require a new DVC run. If a run is needed, Airflow executes the pipeline, records provenance, registers the candidate, validates thresholds, compares against the champion, reloads serving only after promotion, and sends a runtime report.

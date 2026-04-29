@@ -59,6 +59,7 @@ flowchart TB
   Prom --> Grafana
   Loki --> Grafana
   Prom --> Alert
+  Airflow --> Email[SMTP report and failure email]
 ```
 
 ## DVC Artifact Pipeline
@@ -199,6 +200,7 @@ flowchart LR
   Loki --> Grafana
   Prom --> Alertmanager[Alertmanager]
   Alertmanager --> Email[SMTP email]
+  Airflow[Airflow failure callback and report task] --> Email
 ```
 
 ## Artifact Storage Policy
@@ -211,5 +213,6 @@ flowchart LR
 | Metrics and summaries | Postgres JSONB snapshots |
 | DVC pipeline reports | `artifacts/reports/latest_report.md` and `.html` |
 | Airflow runtime reports | `artifacts/runtime/latest_runtime_report.md` and `.html` |
+| Airflow report/failure emails | Airflow `smtp_default` connection through `SmtpHook` |
 | Images uploaded for prediction | Postgres `BYTEA` in `predictions` |
 | Feedback training images | Filesystem snapshot from accepted corrections |

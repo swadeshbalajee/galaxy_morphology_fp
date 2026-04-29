@@ -34,7 +34,7 @@ All major behavior is driven by `config.yaml`.
 | `inference` | Top-k output size |
 | `continuous_improvement` | Retraining thresholds and Airflow schedule |
 | `reporting` | Report title and report behavior |
-| `email` | Airflow report email settings |
+| `email` | Airflow report email and failure notification settings |
 | `services` | Internal service URLs |
 | `registry` | MLflow model name, champion alias, comparison metric |
 
@@ -138,6 +138,17 @@ flowchart TD
 | `registry_status` | registry step | No |
 
 `src/reporting/generate_report.py` writes DVC-owned pipeline reports under `artifacts/reports/`. `src/reporting/generate_runtime_report.py` writes Airflow-owned email reports under `artifacts/runtime/`, so registry-time reporting does not mutate DVC outputs after `dvc.lock` records their hashes. The runtime report uses the training-and-monitoring report sections and omits metric rows whose values are unavailable instead of printing `n/a`.
+
+## Airflow Email Behavior
+
+The DAG sends two kinds of Airflow email through the configured `email.connection_id`, which defaults to `smtp_default`.
+
+| Email type | Implementation | Config gates |
+|---|---|---|
+| Runtime report email | `send_latest_report()` uses `SmtpHook(smtp_conn_id=email.connection_id)` | `email.enabled` |
+| Task failure email | `send_task_failure_email()` is registered as `on_failure_callback` and uses the same `SmtpHook` path | `email.enabled` and `email.email_on_failure` |
+
+The DAG intentionally sets Airflow's native `email_on_failure` default argument to `False`. Native Airflow task emails read Airflow's global SMTP settings and may fall back to `localhost:25`; the hook-backed callback keeps failure notifications on the same tested SMTP connection as runtime report emails.
 
 ## Database Tables
 

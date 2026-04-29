@@ -28,6 +28,7 @@ flowchart LR
   Logs[Service and Airflow logs] --> Loki[Loki]
   Loki --> Grafana
   Prom --> Alertmanager[Alertmanager email alerts]
+  Airflow --> SMTP[SMTP report and failure emails]
 ```
 
 ## What Is Implemented
@@ -40,7 +41,7 @@ flowchart LR
 | User interface | `frontend/app.py`, `frontend/pages/1_Pipeline_Console.py` |
 | Feedback loop | Postgres-backed predictions, correction CSV upload, feedback materialization |
 | Model registry | `src/registry/register_best_model.py`, MLflow champion alias |
-| Monitoring | Prometheus metrics, Grafana dashboard, Loki logs, Alertmanager email |
+| Monitoring | Prometheus metrics, Grafana dashboard, Loki logs, Alertmanager email, Airflow report/failure email |
 | Durable metadata | Postgres tables and JSONB pipeline artifact snapshots |
 
 ## Repository Layout
@@ -100,7 +101,7 @@ flowchart TD
   Email --> Finish[finish]
 ```
 
-Airflow runs the DVC pipeline when raw data or model artifacts are missing, metrics degrade below configured thresholds, enough new feedback has arrived, or the pipeline configuration fingerprint changes. After a successful DVC run, Airflow pushes DVC artifacts to the configured remote when `dvc.push_on_success` is `true`, saves `dvc.lock` provenance under `artifacts/runtime/runs/<run_id>/`, logs `dvc.lock` and `provenance.json` to MLflow, registers a candidate, validates accuracy and macro F1 thresholds, promotes only passing candidates, and reloads serving only after promotion. The provenance JSON also records deployment metadata from `DEPLOYMENT_GIT_COMMIT_SHA`, `APP_VERSION`, `CONTAINER_IMAGE`, and `CI_RUN_ID` when those environment variables are supplied by CI/CD. DVC-owned reports stay under `artifacts/reports/`; Airflow email reports are generated separately under `artifacts/runtime/`.
+Airflow runs the DVC pipeline when raw data or model artifacts are missing, metrics degrade below configured thresholds, enough new feedback has arrived, or the pipeline configuration fingerprint changes. After a successful DVC run, Airflow pushes DVC artifacts to the configured remote when `dvc.push_on_success` is `true`, saves `dvc.lock` provenance under `artifacts/runtime/runs/<run_id>/`, logs `dvc.lock` and `provenance.json` to MLflow, registers a candidate, validates accuracy and macro F1 thresholds, promotes only passing candidates, and reloads serving only after promotion. The provenance JSON also records deployment metadata from `DEPLOYMENT_GIT_COMMIT_SHA`, `APP_VERSION`, `CONTAINER_IMAGE`, and `CI_RUN_ID` when those environment variables are supplied by CI/CD. DVC-owned reports stay under `artifacts/reports/`; Airflow runtime reports are generated separately under `artifacts/runtime/` and emailed with the configured `smtp_default` connection. Task-failure notifications also use the same hook-backed SMTP connection through the DAG failure callback.
 
 To reproduce a tracked run, check out the matching code version, download that run's `dvc.lock` artifact from MLflow, replace the local root `dvc.lock`, then pull the recorded artifacts:
 

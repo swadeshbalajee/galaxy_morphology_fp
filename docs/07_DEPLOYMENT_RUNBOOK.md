@@ -123,6 +123,21 @@ The DAG inspects state, optionally syncs feedback, runs `dvc repro report`, push
 When DVC runs, the DAG fails if the configured DVC push fails or if MLflow provenance artifact logging fails. DVC pipeline reports are kept under `artifacts/reports/`; Airflow runtime email reports are generated separately under `artifacts/runtime/`.
 The DAG schedule is controlled by `continuous_improvement.monitor_schedule` and defaults to `30 12 * * *`; Airflow catchup is disabled. The runtime email uses the training-and-monitoring report sections and omits unavailable metric rows.
 
+## Airflow Email Configuration
+
+Airflow report emails and task-failure emails both use the Airflow connection configured by `email.connection_id`, defaulting to `smtp_default`.
+
+```yaml
+email:
+  enabled: true
+  email_on_failure: true
+  connection_id: smtp_default
+  recipients:
+    - you@example.com
+```
+
+The DAG uses `SmtpHook(smtp_conn_id="smtp_default")` for both report delivery and failure notifications. Native Airflow `email_on_failure` is disabled in DAG defaults because it uses Airflow's global SMTP settings and can fall back to `localhost:25`, which causes `ConnectionRefusedError` in this Compose setup.
+
 ## Reproducing a Run
 
 1. Check out the code version that produced the MLflow run.
@@ -200,7 +215,9 @@ LIMIT 50;
 | Airflow DAG fails on DVC | Airflow task logs | Check trainer dependencies and mounted repo path |
 | MLflow registry unavailable | MLflow URL and Postgres health | Restart `mlflow` after Postgres is healthy |
 | No Prometheus targets | Prometheus `/targets` | Verify service names and ports in `prometheus.yml` |
-| No emails | Alertmanager/Airflow SMTP config | Verify `.env` and Airflow SMTP connection |
+| Report email works but failure email hits `localhost:25` | Native Airflow email path is being used | Restart Airflow so the DAG reloads the hook-backed `on_failure_callback`; verify `email.email_on_failure: true` and `email.connection_id: smtp_default` |
+| No Airflow emails | Airflow SMTP connection | Verify `smtp_default` in Airflow connections or set `AIRFLOW_CONN_SMTP_DEFAULT` |
+| No Alertmanager emails | Alertmanager SMTP config | Verify Mailtrap values in `.env` |
 
 ## Shutdown
 

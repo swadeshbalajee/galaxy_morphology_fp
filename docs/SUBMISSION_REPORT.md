@@ -4,7 +4,7 @@ Submission report generated on 28 April 2026.
 
 ## Executive Summary
 
-This project is an end-to-end AI application for classifying galaxy morphology into elliptical, spiral, lenticular, irregular, and merger classes. It combines a Streamlit user interface, FastAPI services, a PyTorch model, DVC reproducible pipelines, Airflow orchestration, MLflow experiment tracking and registry, Postgres-backed application state, Prometheus/Grafana monitoring, Loki log aggregation, and Alertmanager email notifications.
+This project is an end-to-end AI application for classifying galaxy morphology into elliptical, spiral, lenticular, irregular, and merger classes. It combines a Streamlit user interface, FastAPI services, a PyTorch model, DVC reproducible pipelines, Airflow orchestration, MLflow experiment tracking and registry, Postgres-backed application state, Prometheus/Grafana monitoring, Loki log aggregation, Alertmanager email notifications, and Airflow report/failure emails.
 
 The design follows the assignment guideline by separating the UI, API gateway, model inference engine, ML lifecycle, control plane, and observability stack into independently deployable services connected through REST APIs and Docker Compose networking.
 
@@ -32,7 +32,7 @@ The architecture has six main layers:
 1. User layer: Streamlit frontend and pipeline console.
 2. Serving layer: FastAPI API gateway and FastAPI model service.
 3. ML lifecycle: DVC stages, trainer container, PyTorch training code, generated reports, and MLflow tracking.
-4. Control plane: Airflow DAG with branching, registry, model reload, provenance, and email reporting.
+4. Control plane: Airflow DAG with branching, registry, model reload, provenance, email reporting, and hook-backed task failure email.
 5. State and artifacts: Postgres for predictions, feedback, service logs, control state, and artifact snapshots; filesystem/DVC for datasets and model exports.
 6. Observability: Prometheus, Grafana, Loki, Promtail, and Alertmanager.
 
@@ -85,7 +85,7 @@ This creates a closed loop: prediction -> correction -> feedback snapshot -> ret
 
 Prometheus scrapes the API, model service, and pipeline exporter. Grafana visualizes service health, prediction behavior, latency, drift, and pipeline metrics. Loki receives log streams through Promtail, while service logs are also persisted in Postgres for queryable evidence.
 
-Alertmanager sends email through Mailtrap. The live alert route was verified with TLS enabled, and `GalaxyLiveAccuracyLow` moved from pending to firing after its five-minute `for` window.
+Alertmanager sends email through Mailtrap. Airflow sends runtime report emails and task failure notifications through the configured `smtp_default` connection. The live alert route was verified with TLS enabled, and `GalaxyLiveAccuracyLow` moved from pending to firing after its five-minute `for` window.
 
 | Signal | Tooling | Evidence |
 |---|---|---|
@@ -93,7 +93,7 @@ Alertmanager sends email through Mailtrap. The live alert route was verified wit
 | Metrics | Prometheus client and exporter | `/metrics` endpoints and Prometheus targets |
 | Dashboards | Grafana | Provisioned dashboard JSON |
 | Logs | Loki, Promtail, Postgres service logs | Grafana Loki view and SQL queries |
-| Alerts | Prometheus rules and Alertmanager | Mailtrap alert email |
+| Alerts | Prometheus rules, Alertmanager, and Airflow failure callback | Mailtrap alert/report/failure email |
 
 ## Low-Level Design and API Contracts
 
@@ -142,7 +142,7 @@ The test strategy combines unit tests, integration health checks, functional tes
 | Unit tests | Schemas, preprocessing, metrics, live feedback metrics, config contracts |
 | Integration tests | API health contract |
 | Functional tests | DVC DAG, DVC report pipeline, frontend upload, batch upload, feedback CSV, model reload, report generation |
-| Airflow tests | Branching, DVC run, candidate registration, validation, promotion/rejection, runtime report email |
+| Airflow tests | Branching, DVC run, candidate registration, validation, promotion/rejection, runtime report email, failure email callback |
 | Observability tests | Metrics endpoints, Prometheus targets, Grafana dashboard, Loki readiness, Alertmanager email |
 
 Acceptance criteria are met when the stack starts successfully, the user can perform predictions and feedback, the pipeline can regenerate artifacts, MLflow records candidate/champion decisions, monitoring surfaces runtime signals, alerts can deliver email, and proof screenshots are captured.
@@ -227,7 +227,7 @@ Evidence expected: Show logs visible through Grafana/Loki or Promtail pipeline.
 
 ### Image Placeholder: Mailtrap Email
 
-Evidence expected: Show Alertmanager or Airflow report email received in Mailtrap.
+Evidence expected: Show Alertmanager email, Airflow report email, or Airflow failure email received in Mailtrap.
 
 ![Placeholder - Mailtrap Email](image/proof/<replace-with-screenshot>.png)
 
